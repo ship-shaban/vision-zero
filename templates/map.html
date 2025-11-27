@@ -1,0 +1,2529 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Vision Zero - Toronto Collision Map</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <!-- noUiSlider CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/nouislider@15.7.1/dist/nouislider.min.css" />
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            right: 0;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 60px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            z-index: 10000;
+            font-size: 20px;
+            font-weight: 600;
+            text-align: center;
+            min-width: 320px;
+        }
+
+        #loadingProgress {
+            font-size: 14px;
+            margin-top: 10px;
+            opacity: 0.9;
+        }
+
+        #loading::after {
+            content: '';
+            display: block;
+            width: 40px;
+            height: 40px;
+            margin: 20px auto 0;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #yearControl {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 1000;
+            width: 320px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
+        #yearControl > div:first-child {
+            color: #d32f2f;
+            letter-spacing: 0.5px;
+        }
+
+        #yearSlider { margin: 15px 0; }
+        #yearDisplay {
+            font-size: 14px;
+            text-align: center;
+            margin: 12px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        #resetYear {
+            width: 100%;
+            padding: 10px;
+            background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(211, 47, 47, 0.3);
+        }
+        #resetYear:hover {
+            background: linear-gradient(135deg, #b71c1c 0%, #d32f2f 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(211, 47, 47, 0.4);
+        }
+        #resetYear:active {
+            transform: translateY(0);
+        }
+
+        #filterPanel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 1000;
+            width: 360px;
+            max-height: 90vh;
+            overflow-y: auto;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
+        #filterPanel h3 {
+            background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 15px !important;
+            font-size: 16px !important;
+            letter-spacing: 1px;
+        }
+
+        #filterPanel::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #filterPanel::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        #filterPanel::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+        }
+
+        #filterPanel::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+
+        .filter-count {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .filter-section {
+            margin-bottom: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .filter-section:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+        }
+
+        .filter-title {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 12px 15px;
+            font-weight: 600;
+            font-size: 12px;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s ease;
+        }
+
+        .filter-title:hover {
+            background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+            padding-left: 18px;
+        }
+
+        .filter-options {
+            padding: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .filter-checkbox {
+            display: block;
+            padding: 6px 10px;
+            font-size: 11px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .filter-checkbox:hover {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding-left: 14px;
+        }
+
+        .filter-checkbox input {
+            margin-right: 8px;
+            cursor: pointer;
+            width: 14px;
+            height: 14px;
+        }
+
+        .vulnerable-highlight {
+            border: 2px solid #ff9800;
+            box-shadow: 0 2px 12px rgba(255, 152, 0, 0.2);
+        }
+
+        .vulnerable-highlight .filter-title {
+            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+            color: #e65100;
+            font-weight: 700;
+        }
+
+        .vulnerable-highlight:hover {
+            border-color: #f57c00;
+            box-shadow: 0 4px 16px rgba(255, 152, 0, 0.3);
+        }
+
+        .collapse-icon {
+            font-size: 10px;
+            color: #666;
+        }
+
+        .ward-select {
+            width: 100%;
+            padding: 10px 12px;
+            margin-top: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 13px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .ward-select:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+        }
+
+        .ward-select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .reset-all-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 15px;
+            font-size: 13px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(211, 47, 47, 0.3);
+            letter-spacing: 0.5px;
+        }
+        .reset-all-btn:hover {
+            background: linear-gradient(135deg, #b71c1c 0%, #d32f2f 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(211, 47, 47, 0.4);
+        }
+        .reset-all-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Enhanced Leaflet Popup Styles */
+        .leaflet-popup-content-wrapper {
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            padding: 0;
+            overflow: hidden;
+            min-width: 320px;
+        }
+
+        .leaflet-popup-content {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            width: auto !important;
+        }
+
+        .leaflet-popup-tip {
+            box-shadow: 0 3px 14px rgba(0,0,0,0.15);
+        }
+
+        .leaflet-popup {
+            margin-bottom: 30px;
+        }
+
+        /* Custom Popup Styles for Boundaries */
+        .boundary-popup {
+            padding: 15px;
+            min-width: 220px;
+        }
+
+        .boundary-popup-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .boundary-popup-name {
+            font-size: 16px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .boundary-popup-meta {
+            font-size: 12px;
+            color: #777;
+            padding-top: 8px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .ward-popup .boundary-popup-name { color: #2E86AB; }
+        .division-popup .boundary-popup-name { color: #A23B72; }
+        .neighbourhood-popup .boundary-popup-name { color: #6A994E; }
+
+        /* Geographic Toggle Buttons */
+        .geo-toggle-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            background: #f8f9fa;
+            padding: 6px;
+            border-radius: 8px;
+        }
+
+        .geo-toggle-btn {
+            flex: 1;
+            padding: 8px 12px;
+            border: 2px solid transparent;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            text-align: center;
+            transition: all 0.3s ease;
+            color: #666;
+        }
+
+        .geo-toggle-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .geo-toggle-btn.active {
+            font-weight: 700;
+        }
+
+        .geo-toggle-btn.active.ward-btn {
+            background: #2E86AB;
+            color: white;
+            border-color: #2E86AB;
+            box-shadow: 0 2px 8px rgba(46, 134, 171, 0.3);
+        }
+
+        .geo-toggle-btn.active.division-btn {
+            background: #A23B72;
+            color: white;
+            border-color: #A23B72;
+            box-shadow: 0 2px 8px rgba(162, 59, 114, 0.3);
+        }
+
+        .geo-toggle-btn.active.neighbourhood-btn {
+            background: #6A994E;
+            color: white;
+            border-color: #6A994E;
+            box-shadow: 0 2px 8px rgba(106, 153, 78, 0.3);
+        }
+
+        /* Info Icon Styles */
+        .info-icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            line-height: 16px;
+            text-align: center;
+            background: #2196f3;
+            color: white;
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: help;
+            margin-left: 5px;
+            margin-right: 4px;
+            transition: all 0.2s ease;
+            vertical-align: middle;
+        }
+
+        .info-icon:hover {
+            background: #1976d2;
+            transform: scale(1.1);
+        }
+
+        /* Tooltip Popup */
+        .info-tooltip {
+            position: fixed;
+            background: white;
+            border: 2px solid #2196f3;
+            border-radius: 8px;
+            padding: 12px 15px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+            z-index: 100000;
+            max-width: 320px;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #333;
+            display: none;
+        }
+
+        .info-tooltip.active {
+            display: block;
+        }
+
+        .info-tooltip-title {
+            font-weight: 700;
+            color: #1976d2;
+            margin-bottom: 8px;
+            font-size: 13px;
+            border-bottom: 1px solid #e3f2fd;
+            padding-bottom: 6px;
+        }
+
+        .info-tooltip-content {
+            color: #555;
+        }
+
+        .info-tooltip-content strong {
+            color: #333;
+            font-weight: 600;
+        }
+
+        /* Welcome Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100001;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            font-size: 24px;
+            font-weight: bold;
+            color: #d32f2f;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .modal-body {
+            font-size: 14px;
+            line-height: 1.8;
+            color: #333;
+        }
+
+        .modal-body h4 {
+            color: #d32f2f;
+            margin: 15px 0 10px 0;
+            font-size: 16px;
+        }
+
+        .modal-body p {
+            margin: 10px 0;
+        }
+
+        .modal-body .highlight {
+            background: #fff3e0;
+            padding: 15px;
+            border-left: 4px solid #ff9800;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .modal-body .example {
+            background: #e3f2fd;
+            padding: 12px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 13px;
+        }
+
+        .modal-footer {
+            margin-top: 25px;
+            text-align: center;
+        }
+
+        .modal-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .modal-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .marker-legend {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin: 15px 0;
+        }
+
+        .marker-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .marker-legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <!-- Help Modal (hidden by default) -->
+    <div id="welcomeModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">Understanding Collision Data</div>
+            <div class="modal-body">
+                <div class="highlight">
+                    <strong>Important:</strong> This map shows both <strong>collision events</strong> and the <strong>parties involved</strong> in those collisions. Understanding the difference is crucial for accurate analysis.
+                </div>
+
+                <h4>🚗 What is a "Collision"?</h4>
+                <p>A <strong>collision</strong> is a single incident or crash event that occurred at a specific time and location.</p>
+                <div class="example">
+                    <strong>Example:</strong> A car runs a red light and hits another car at an intersection. This is <strong>1 collision</strong>.
+                </div>
+
+                <h4>👥 What is a "Party"?</h4>
+                <p>A <strong>party</strong> is each person or vehicle involved in a collision event. One collision can involve multiple parties.</p>
+                <div class="example">
+                    <strong>Example:</strong> The same red light collision involves:<br>
+                    • Driver of car 1 (Party 1)<br>
+                    • Passenger in car 1 (Party 2)<br>
+                    • Driver of car 2 (Party 3)<br>
+                    • Cyclist who was also hit (Party 4)<br>
+                    <strong>Result: 1 collision with 4 parties</strong>
+                </div>
+
+                <h4>🗺️ How Markers Work on This Map</h4>
+                <p><strong>Each marker represents one party involved in a collision.</strong> Multi-party collisions will have multiple overlapping markers at the same location.</p>
+
+                <div class="marker-legend">
+                    <div class="marker-legend-item">
+                        <div class="marker-legend-dot" style="background: #2196f3;"></div>
+                        <span>Single-party collision</span>
+                    </div>
+                    <div class="marker-legend-item">
+                        <div class="marker-legend-dot" style="background: #ff9800;"></div>
+                        <span>Multi-party collision</span>
+                    </div>
+                </div>
+
+                <h4>📊 Reading the Counts</h4>
+                <p>Throughout the interface, you'll see both party and collision counts:</p>
+                <div class="example">
+                    "Showing: 18,957 parties (6,868 collision events)"<br>
+                    This means 18,957 people/vehicles were involved in 6,868 separate crashes.
+                </div>
+
+                <h4>🔢 Cluster Numbers</h4>
+                <p><strong>Cluster icons show the number of unique collision events</strong> in that area, not the total number of parties. This prevents double-counting multi-party collisions.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-button" onclick="closeWelcomeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+    <div id="loading">
+        <div>Loading Vision Zero Map...</div>
+        <div id="loadingProgress">Initializing...</div>
+    </div>
+
+    <!-- Year Range Slider -->
+    <div id="yearControl" style="display:none;">
+        <div style="text-align: center; font-weight: bold; font-size: 14px; margin-bottom: 5px;">
+            SELECT YEAR RANGE
+        </div>
+        <div id="yearSlider"></div>
+        <div id="yearDisplay">Showing: 2006-2023 ({{ total_parties|number_format }} parties from {{ unique_collisions|number_format }} collisions)</div>
+        <button id="resetYear">Reset to All Years</button>
+    </div>
+
+    <div id="filterPanel" style="display:none;">
+        <h3 style="margin: 0 0 10px 0; text-align: center; color: #d32f2f; font-size: 14px;">
+            FILTERS
+        </h3>
+
+        <div class="filter-count" id="filterCount">
+            Showing: {{ total_parties|number_format }} parties<br>
+            <span style="font-size:11px;">({{ unique_collisions|number_format }} collision events)</span>
+        </div>
+
+        <div style="background: #e3f2fd; padding: 8px 10px; margin: 10px 0; border-radius: 4px; font-size: 11px; color: #1565c0; border-left: 3px solid #2196f3;">
+            <div style="font-weight: 600; margin-bottom: 4px;">ℹ️ About Collision Counts</div>
+            <div style="line-height: 1.4;">
+                • Counts show unique collision events<br>
+                • Each collision may involve multiple parties<br>
+                • <span style="color: #ff9800;">●</span> Orange markers = multi-party collisions<br>
+                • <span style="color: #2196f3;">●</span> Blue markers = single-party collisions<br>
+                <a href="javascript:void(0)" onclick="openHelpModal()" style="color: #1976d2; text-decoration: underline; font-weight: 600; margin-top: 4px; display: inline-block;">📖 Learn More</a>
+            </div>
+        </div>
+
+        <div style="background: #fff3e0; padding: 8px 10px; margin: 10px 0; border-radius: 4px; font-size: 10px; color: #e65100; border-left: 3px solid #ff9800;">
+            <div style="font-weight: 600; margin-bottom: 4px;">📊 Data Quality Metrics</div>
+            <div style="line-height: 1.5;">
+                • Data Range: {{ date_range }}<br>
+                • Geolocation: {{ pct_outside_wards }}% outside ward boundaries<br>
+                • Road User Unknown: {{ pct_empty_road_user }}%<br>
+                • Age Unknown: {{ pct_empty_age }}%
+            </div>
+        </div>
+
+        <!-- Filters will be populated here -->
+        <div id="filterSections"></div>
+
+        <button class="reset-all-btn" onclick="resetAllFilters()">RESET ALL</button>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet MarkerCluster JS -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <!-- noUiSlider JS -->
+    <script src="https://unpkg.com/nouislider@15.7.1/dist/nouislider.min.js"></script>
+
+    <script>
+        console.time('Total Load Time');
+
+        // Help Modal Functions
+        function openHelpModal() {
+            const modal = document.getElementById('welcomeModal');
+            modal.style.display = 'flex';
+        }
+
+        function closeWelcomeModal() {
+            const modal = document.getElementById('welcomeModal');
+            modal.style.display = 'none';
+        }
+
+        // Close modal when clicking outside of it
+        document.addEventListener('click', function(event) {
+            const modal = document.getElementById('welcomeModal');
+            if (event.target === modal) {
+                closeWelcomeModal();
+            }
+        });
+
+        // ============================================================================
+        // COMPREHENSIVE DIAGNOSTIC LOGGING SYSTEM
+        // ============================================================================
+        const DIAG = {
+            startTime: Date.now(),
+            events: [],
+            log: function(category, message, data) {
+                const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(2);
+                const prefix = `[${elapsed}s] [${category}]`;
+                if (data !== undefined) {
+                    console.log(prefix, message, data);
+                } else {
+                    console.log(prefix, message);
+                }
+                this.events.push({time: elapsed + 's', category, message, data});
+            },
+            error: function(category, message, error) {
+                const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(2);
+                console.error(`[${elapsed}s] [${category}] ❌ ERROR:`, message, error);
+                this.events.push({time: elapsed + 's', category, type: 'ERROR', message, error: error?.message, stack: error?.stack});
+            },
+            summary: function() {
+                console.log('\n' + '='.repeat(80));
+                console.log('📊 DIAGNOSTIC SUMMARY');
+                console.log('='.repeat(80));
+                console.log('Total events:', this.events.length);
+                console.log('Total time:', ((Date.now() - this.startTime) / 1000).toFixed(2) + 's');
+                const errors = this.events.filter(e => e.type === 'ERROR');
+                if (errors.length > 0) {
+                    console.log('⚠️ ERRORS FOUND:', errors.length);
+                    errors.forEach(e => console.log(`  - [${e.time}] ${e.category}: ${e.message}`));
+                }
+                console.log('='.repeat(80) + '\n');
+            }
+        };
+
+        // Initialize map
+        DIAG.log('INIT', '🚀 Script started');
+        DIAG.log('INIT', '🗺️  Creating Leaflet map');
+        var map = L.map('map').setView([43.7, -79.4], 11);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        DIAG.log('INIT', '✅ Map tiles added');
+
+        var markersData, filtersMetadata, wardsGeoJSON, divisionsGeoJSON, neighbourhoodsGeoJSON;
+        var allMarkers = [];
+        var markerClusterGroup, filterCounts;
+        var currentYearRange = [2006, 2023];
+        var filterTimeoutId = null;
+        var wardBoundariesLayer = null;
+        var divisionBoundariesLayer = null;
+        var neighbourhoodBoundariesLayer = null;
+        var wardLayers = {}; // Store individual ward layers for highlighting
+        var divisionLayers = {}; // Store individual division layers for highlighting
+        var neighbourhoodLayers = {}; // Store individual neighbourhood layers for highlighting
+        var activeGeoType = 'ward'; // Current active geographic type: 'ward', 'division', or 'neighbourhood'
+
+        // Filter key mapping (defined globally)
+        const filterKeyMap = {
+            'ward': 'ward',
+            'division': 'division',
+            'neighbourhood': 'neighbourhood',
+            'time_range': 'time_range',
+            'road_user_category': 'road_user_category',
+            'age_category': 'age_category',
+            'vulnerable_road_user': 'vulnerable',
+            'acclass': 'acclass',
+            'invage': 'invage',
+            'pedestrian': 'pedestrian',
+            'cyclist': 'cyclist',
+            'speeding': 'speeding',
+            'redlight': 'redlight',
+            'drivcond': 'drivcond',
+            'visibility': 'visibility',
+            'light': 'light',
+            'rdsfcond': 'rdsfcond',
+            'road_class': 'road_class',
+            'traffctl': 'traffctl',
+            'impactype': 'impactype'
+        };
+
+        // Create popup function (defined globally so it can be used by progressive loading)
+        function createPopup(data) {
+            let collisionHeader = '';
+            if (data.num_parties && data.num_parties > 1) {
+                collisionHeader = `<div style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+                    color: white; padding: 10px 15px; font-size: 13px; text-align: center;
+                    font-weight: 600; letter-spacing: 0.3px;">
+                    ⚠️ Multi-party collision (${data.num_parties} parties involved)
+                </div>
+                <div style="background: #fff9e6; padding: 8px 12px; font-size: 11px; color: #856404;
+                    border-left: 3px solid #ffc107; margin-bottom: 8px;">
+                    💡 This record shows one party in a ${data.num_parties}-party collision.
+                    Other markers at this location show additional parties.
+                </div>`;
+            }
+
+            let personHeader = '';
+            if (data.invtype && data.invtype !== '') {
+                personHeader = `<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white; padding: 12px 15px; font-size: 13px; text-align: center; font-weight: 500;">
+                    👤 ${data.invtype}`;
+                if (data.invage && data.invage !== '' && data.invage !== 'unknown') {
+                    personHeader += ` <span style="opacity: 0.9;">(${data.invage})</span>`;
+                }
+                if (data.injury && data.injury !== '') {
+                    personHeader += ` - <strong>${data.injury} Injury</strong>`;
+                }
+                personHeader += '</div>';
+            }
+
+            let vehicleSection = '';
+            if (data.vehtype && data.vehtype !== '') {
+                vehicleSection = `<div style="margin: 12px 0; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                    <div style="font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Vehicle</div>
+                    <div style="font-size: 13px; color: #333; font-weight: 500;">${data.vehtype}</div>`;
+
+                if (data.manoeuver && data.manoeuver !== '') {
+                    vehicleSection += `<div style="font-size: 12px; color: #555; margin-top: 6px;">
+                        <strong>Manoeuver:</strong> ${data.manoeuver}`;
+                    if (data.initdir && data.initdir !== '') vehicleSection += ` from ${data.initdir}`;
+                    vehicleSection += '</div>';
+                }
+                if (data.drivact && data.drivact !== '') {
+                    vehicleSection += `<div style="font-size: 12px; color: #555; margin-top: 4px;">
+                        <strong>Action:</strong> ${data.drivact}
+                    </div>`;
+                }
+                vehicleSection += '</div>';
+            }
+
+            let partiesSection = '';
+            let parties = [];
+            if (data.pedestrian === 'Yes') parties.push('🚶 Pedestrian');
+            if (data.cyclist === 'Yes') parties.push('🚴 Cyclist');
+            if (data.vulnerable === 'Yes' && parties.length === 0) parties.push('⚠️ Vulnerable Road User');
+
+            if (parties.length > 0) {
+                partiesSection = `<div style="margin: 12px 0; padding: 10px; background: #fff3e0; border-radius: 6px; border-left: 3px solid #ff9800;">
+                    <div style="font-size: 11px; color: #e65100; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Involved</div>
+                    <div style="font-size: 13px; color: #333;">${parties.join(', ')}</div>
+                </div>`;
+            }
+
+            let factorsSection = '';
+            let factors = [];
+            if (data.speeding === 'Yes') factors.push('⚡ Speeding');
+            if (data.redlight === 'Yes') factors.push('🔴 Red Light');
+            if (data.ag_driv === 'Yes') factors.push('🚗 Aggressive Driving');
+            if (data.alcohol === 'Yes') factors.push('🍺 Alcohol');
+
+            if (factors.length > 0) {
+                factorsSection = `<div style="margin: 12px 0; padding: 10px; background: #ffebee; border-radius: 6px; border-left: 3px solid #d32f2f;">
+                    <div style="font-size: 11px; color: #b71c1c; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Factors</div>
+                    <div style="font-size: 13px; color: #333;">${factors.join(', ')}</div>
+                </div>`;
+            }
+
+            let conditionsSection = '';
+            let conditions = [];
+            if (data.light && data.light !== '') conditions.push('💡 ' + data.light);
+            if (data.visibility && data.visibility !== '') conditions.push('👁️ ' + data.visibility);
+            if (data.rdsfcond && data.rdsfcond !== '') conditions.push('🛣️ ' + data.rdsfcond);
+
+            if (conditions.length > 0) {
+                conditionsSection = `<div style="margin: 12px 0; padding: 10px; background: #e3f2fd; border-radius: 6px; border-left: 3px solid #1976d2;">
+                    <div style="font-size: 11px; color: #0d47a1; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Conditions</div>
+                    <div style="font-size: 13px; color: #333;">${conditions.join(', ')}</div>
+                </div>`;
+            }
+
+            return `<div style="min-width: 320px; max-width: 380px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                ${collisionHeader}
+                ${personHeader}
+                <div style="background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+                    color: white; padding: 12px 15px; font-weight: 600; font-size: 14px;
+                    text-align: center; letter-spacing: 0.3px;">
+                    ${data.acclass}
+                </div>
+                <div style="padding: 15px;">
+                    <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 13px; margin-bottom: 12px;">
+                        <div style="color: #666; font-weight: 500;">Date:</div>
+                        <div style="color: #333; font-weight: 600;">${data.date}</div>
+
+                        <div style="color: #666; font-weight: 500;">Year:</div>
+                        <div style="color: #333; font-weight: 600;">${data.year}</div>
+
+                        <div style="color: #666; font-weight: 500;">Location:</div>
+                        <div style="color: #333; font-weight: 600;">${data.street}</div>
+
+                        <div style="color: #666; font-weight: 500;">Ward:</div>
+                        <div style="color: #333; font-weight: 600;">${(() => {
+                            if (!data.ward || data.ward === '') return '(Unknown)';
+                            const match = data.ward.match(/^(.+?)\s*\((\d+)\)$/);
+                            if (match) {
+                                return `${match[1]} (Ward ${match[2]})`;
+                            }
+                            return data.ward;
+                        })()}</div>
+                    </div>
+                    ${vehicleSection}
+                    ${partiesSection}
+                    ${factorsSection}
+                    ${conditionsSection}
+                </div>
+            </div>`;
+        }
+
+        // Load data from server
+        DIAG.log('DATA-FETCH', '📡 Starting initial data fetch');
+
+        function updateProgress(message) {
+            const progressEl = document.getElementById('loadingProgress');
+            if (progressEl) progressEl.textContent = message;
+            DIAG.log('PROGRESS', message);
+        }
+
+        // Load data with progress indicators
+        // NOTE: Divisions (882KB) and Neighbourhoods (2.0MB) are loaded lazily when user switches views
+        // OPTIMIZATION: Show map immediately with boundaries, load collision data in background
+
+        updateProgress('Loading map...');
+
+        // Load wards and filters first (fast ~1MB) - show map immediately
+        DIAG.log('DATA-FETCH', 'Fetching wards and filters in parallel');
+        Promise.all([
+            fetch('/api/wards').then(r => {
+                DIAG.log('DATA-FETCH', '✅ Wards response received');
+                return r.json();
+            }),
+            fetch('/api/filters').then(r => {
+                DIAG.log('DATA-FETCH', '✅ Filters response received');
+                return r.json();
+            })
+        ]).then(([wards, filters]) => {
+            DIAG.log('DATA-PARSE', '✅ Wards data parsed', {features: wards.features?.length});
+            DIAG.log('DATA-PARSE', '✅ Filters parsed', {count: Object.keys(filters).length, keys: Object.keys(filters).slice(0,5).join(', ')});
+
+            wardsGeoJSON = wards;
+            filtersMetadata = filters;
+            markersData = []; // Empty for now
+
+            updateProgress('Initializing map...');
+
+            // Initialize map with just boundaries (no markers yet)
+            DIAG.log('MAP-INIT', '🗺️  Calling initializeMapBoundaries()');
+            initializeMapBoundaries();
+
+            // Initialize filters IMMEDIATELY (before markers load)
+            // This ensures filters appear even if markers take time to load
+            DIAG.log('FILTER-INIT', '🎛️  Calling initializeFiltersEarly()');
+            initializeFiltersEarly();
+
+            // Hide loading screen and show controls
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('yearControl').style.display = 'block';
+            document.getElementById('filterPanel').style.display = 'block';
+            DIAG.log('UI', '✅ UI controls now visible (loading screen hidden)');
+
+            DIAG.log('MARKER-LOAD', '📍 Calling loadMarkersProgressively()');
+
+            // Now load collision data progressively in background
+            loadMarkersProgressively();
+        })
+        .catch(error => {
+            DIAG.error('DATA-FETCH', 'Failed to load initial data', error);
+            document.getElementById('loading').innerHTML = '<div>Error loading data. Please refresh the page.</div><div id="loadingProgress" style="color: #ffcdd2;">' + error.message + '</div>';
+            document.getElementById('loading').style.display = 'flex';
+        });
+
+        function initializeMapBoundaries() {
+            console.log('Initializing map with boundaries only');
+
+            // Add ward boundaries
+            wardBoundariesLayer = L.geoJSON(wardsGeoJSON, {
+                style: {
+                    fillColor: '#2E86AB',
+                    weight: 3,
+                    opacity: 0.8,
+                    color: '#2E86AB',
+                    fillOpacity: 0.15
+                },
+                onEachFeature: function(feature, layer) {
+                    if (feature.properties && feature.properties.AREA_DESC) {
+                        const areaDesc = feature.properties.AREA_DESC;
+                        const wardNum = feature.properties.AREA_SHORT_CODE || 'N/A';
+
+                        // Bind popup with a function that generates content dynamically
+                        layer.bindPopup(function() {
+                            // Extract ward number and name
+                            const match = areaDesc.match(/^(.+?)\s*\((\d+)\)$/);
+                            const wardName = match ? match[1] : areaDesc;
+
+                            // Get collision count for this ward (will be available when popup opens)
+                            const collisionCount = (filterCounts && filterCounts['ward']) ? (filterCounts['ward'][areaDesc] || 0) : 0;
+
+                            return '<div class="boundary-popup ward-popup">' +
+                                '<div class="boundary-popup-title">WARD</div>' +
+                                '<div class="boundary-popup-name">Ward ' + wardNum + ': ' + wardName + '</div>' +
+                                '<div class="boundary-popup-meta">' + collisionCount.toLocaleString() + ' collisions</div>' +
+                                '</div>';
+                        });
+                        wardLayers[feature.properties.AREA_DESC] = layer;
+
+                        // Add hover effect
+                        layer.on('mouseover', function(e) {
+                            e.target.setStyle({
+                                weight: 4,
+                                opacity: 1,
+                                fillOpacity: 0.25
+                            });
+                        });
+                        layer.on('mouseout', function(e) {
+                            e.target.setStyle({
+                                weight: 3,
+                                opacity: 0.8,
+                                fillOpacity: 0.15
+                            });
+                        });
+                    }
+                }
+            });
+
+            // Division boundaries are loaded lazily (882KB, 24K coordinates)
+            // Neighbourhood boundaries are loaded lazily (2.0MB, 46K coordinates)
+            // They will be fetched when user switches to division/neighbourhood view
+
+            // Only add wards by default, others controlled by layer control
+            wardBoundariesLayer.addTo(map);
+        }
+
+        // Progressive marker loading to prevent browser hang
+        function loadMarkersProgressively() {
+            const BATCH_SIZE = 1000; // Load 1000 markers at a time (smaller batches for smoother loading)
+            let offset = 0;
+            let totalLoaded = 0;
+            let totalMarkers = 0;
+
+            // Create marker cluster group immediately
+            markerClusterGroup = L.markerClusterGroup({
+                chunkedLoading: true,
+                chunkInterval: 200,
+                chunkDelay: 50,
+                maxClusterRadius: 80,
+                disableClusteringAtZoom: 999,
+                spiderfyOnMaxZoom: true,
+                showCoverageOnHover: false,
+                zoomToBoundsOnClick: true,
+                spiderfyDistanceMultiplier: 2,
+                iconCreateFunction: function(cluster) {
+                    var markers = cluster.getAllChildMarkers();
+                    var uniqueCollisions = new Set();
+                    markers.forEach(function(marker) {
+                        var collisionId = marker.filterData.date + '_' + marker.filterData.lat + '_' + marker.filterData.lon;
+                        uniqueCollisions.add(collisionId);
+                    });
+                    var count = uniqueCollisions.size;
+                    return L.divIcon({
+                        html: '<div style="background-color:#2196f3;color:white;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);">' + count + '</div>',
+                        className: 'custom-cluster-icon',
+                        iconSize: L.point(40, 40)
+                    });
+                }
+            });
+            map.addLayer(markerClusterGroup);
+
+            function loadBatch() {
+                console.log(`Loading marker batch: offset ${offset}, limit ${BATCH_SIZE}`);
+
+                fetch(`/api/markers?offset=${offset}&limit=${BATCH_SIZE}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        const batch = data.markers;
+                        totalMarkers = data.total;
+                        totalLoaded += batch.length;
+
+                        console.log(`Loaded ${batch.length} markers (${totalLoaded}/${totalMarkers})`);
+
+                        try {
+                            // Add batch to markersData and allMarkers
+                            markersData = markersData.concat(batch);
+                            console.log('Creating markers...');
+
+                            // Create markers for this batch
+                            batch.forEach(function(markerData) {
+                                var isMultiParty = markerData.num_parties && markerData.num_parties > 1;
+                                var marker = L.circleMarker([markerData.lat, markerData.lon], {
+                                    radius: isMultiParty ? 6 : 5,
+                                    fillColor: isMultiParty ? '#ff9800' : '#2196f3',
+                                    color: '#fff',
+                                    weight: isMultiParty ? 2 : 1,
+                                    fillOpacity: 0.8
+                                });
+                                marker.bindPopup(createPopup(markerData));
+                                marker.filterData = markerData;
+                                allMarkers.push(marker);
+                            });
+                            DIAG.log('MARKER-BATCH', `✅ Created ${batch.length} Leaflet markers (total now: ${allMarkers.length})`);
+
+                            // PERFORMANCE FIX: Don't add to cluster during batch loading
+                            // Adding markers incrementally causes browser freezing
+                            // Instead, we'll add all markers at once after all batches are loaded
+                            DIAG.log('MARKER-BATCH', '⏭️  Skipping cluster addition (will add all at end to prevent freeze)');
+
+                            // Update filter counts after first batch so users see data quickly
+                            DIAG.log('MARKER-BATCH', 'Checking if should update filters', {offset: offset});
+                            if (offset === 0) {
+                                DIAG.log('FILTER-UPDATE', '🎯 First batch - updating filters NOW');
+                                try {
+                                    updateFilterCounts();
+                                    DIAG.log('FILTER-UPDATE', '✅ Filter counts updated after first batch');
+                                } catch (filterError) {
+                                    DIAG.error('FILTER-UPDATE', 'Error updating filter counts', filterError);
+                                }
+                            } else {
+                                DIAG.log('FILTER-UPDATE', '⏭️  Subsequent batch - skipping filter update');
+                            }
+                        } catch (error) {
+                            console.error('Error processing batch:', error);
+                            console.error('Stack trace:', error.stack);
+                        }
+
+                        // Load next batch if there are more
+                        DIAG.log('MARKER-BATCH', 'Checking if more batches needed', {hasMore: data.hasMore});
+                        if (data.hasMore) {
+                            offset += BATCH_SIZE;
+                            DIAG.log('MARKER-BATCH', `📥 Loading next batch (offset ${offset})...`);
+                            setTimeout(loadBatch, 100); // Small delay between batches
+                        } else {
+                            DIAG.log('MARKER-LOAD', '🎉 ALL BATCHES LOADED!', {totalMarkers: allMarkers.length});
+
+                            // Add markers to cluster in CHUNKS to prevent browser freeze
+                            // Adding 18K+ markers at once freezes the browser
+                            const CLUSTER_CHUNK_SIZE = 500;
+                            let clusterIndex = 0;
+
+                            function addMarkersToClusterInChunks() {
+                                const end = Math.min(clusterIndex + CLUSTER_CHUNK_SIZE, allMarkers.length);
+                                const chunk = allMarkers.slice(clusterIndex, end);
+                                const chunkNum = Math.floor(clusterIndex / CLUSTER_CHUNK_SIZE) + 1;
+                                const totalChunks = Math.ceil(allMarkers.length / CLUSTER_CHUNK_SIZE);
+
+                                DIAG.log('MARKER-LOAD', `⚙️  Adding chunk ${chunkNum}/${totalChunks}: ${chunk.length} markers (${clusterIndex}-${end})`);
+
+                                try {
+                                    markerClusterGroup.addLayers(chunk);
+                                    clusterIndex = end;
+
+                                    if (clusterIndex < allMarkers.length) {
+                                        // More chunks to add - continue after short delay
+                                        setTimeout(addMarkersToClusterInChunks, 50);
+                                    } else {
+                                        // All chunks added!
+                                        DIAG.log('MARKER-LOAD', '✅ All markers successfully added to cluster and visible on map!');
+
+                                        // Final filter update
+                                        DIAG.log('FILTER-UPDATE', '🎯 Final filter update with all markers...');
+                                        try {
+                                            updateFilterCounts();
+                                            DIAG.log('FILTER-UPDATE', '✅ Final filter counts updated successfully');
+                                        } catch (filterError) {
+                                            DIAG.error('FILTER-UPDATE', 'Error in final filter update', filterError);
+                                        }
+
+                                        DIAG.log('COMPLETE', '🎊 MAP FULLY LOADED AND READY!');
+                                    }
+                                } catch (clusterError) {
+                                    DIAG.error('MARKER-LOAD', `Failed to add chunk ${chunkNum}`, clusterError);
+                                }
+                            }
+
+                            // Start chunked cluster addition
+                            DIAG.log('MARKER-LOAD', `Starting chunked cluster addition (${CLUSTER_CHUNK_SIZE} markers per chunk)...`);
+                            addMarkersToClusterInChunks();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading marker batch:', error);
+                    });
+            }
+
+            // Start loading first batch
+            loadBatch();
+        }
+
+        // Initialize filters early (before all markers are loaded)
+        function initializeFiltersEarly() {
+            // This version initializes filters with empty counts
+            // Counts will be updated as markers load
+            filterCounts = {};
+
+            const filterSections = document.getElementById('filterSections');
+            filterSections.innerHTML = '';
+
+            const filterOrder = ['geographic', 'time_range', 'road_user_category', 'age_category', 'acclass',
+                               'speeding', 'redlight', 'drivcond', 'visibility',
+                               'light', 'rdsfcond', 'road_class', 'traffctl', 'impactype'];
+
+            filterOrder.forEach(filterKey => {
+                if (filterKey === 'geographic') {
+                    // Create geographic selector section
+                    const section = document.createElement('div');
+                    section.className = 'filter-section';
+                    section.id = 'geoSection';
+
+                    const title = document.createElement('div');
+                    title.className = 'filter-title';
+                    title.style.cursor = 'default';
+                    title.innerHTML = 'GEOGRAPHIC AREA';
+
+                    const toggleContainer = document.createElement('div');
+                    toggleContainer.className = 'geo-toggle-container';
+
+                    const wardBtn = document.createElement('button');
+                    wardBtn.className = 'geo-toggle-btn ward-btn active';
+                    wardBtn.textContent = 'Wards (25)';
+                    wardBtn.onclick = () => switchGeoType('ward');
+
+                    const divisionBtn = document.createElement('button');
+                    divisionBtn.className = 'geo-toggle-btn division-btn';
+                    divisionBtn.textContent = 'Divisions (16)';
+                    divisionBtn.onclick = () => switchGeoType('division');
+
+                    const neighbourhoodBtn = document.createElement('button');
+                    neighbourhoodBtn.className = 'geo-toggle-btn neighbourhood-btn';
+                    neighbourhoodBtn.textContent = 'Neighbourhoods (158)';
+                    neighbourhoodBtn.onclick = () => switchGeoType('neighbourhood');
+
+                    toggleContainer.appendChild(wardBtn);
+                    toggleContainer.appendChild(divisionBtn);
+                    toggleContainer.appendChild(neighbourhoodBtn);
+
+                    const dropdownContainer = document.createElement('div');
+                    dropdownContainer.id = 'geoDropdownContainer';
+                    dropdownContainer.innerHTML = '<select id="geoSelect" class="ward-select"><option value="ALL">All Wards (Loading...)</option></select>';
+
+                    section.appendChild(title);
+                    section.appendChild(toggleContainer);
+                    section.appendChild(dropdownContainer);
+                    filterSections.appendChild(section);
+                } else if (filterKey === 'ward' || filterKey === 'division' || filterKey === 'neighbourhood') {
+                    return;
+                } else {
+                    const filterKeyUpper = filterKey.toUpperCase();
+                    const values = filtersMetadata[filterKeyUpper];
+                    if (!values) return;
+
+                    const markerDataKey = filterKeyMap[filterKey];
+                    const section = document.createElement('div');
+                    section.className = 'filter-section' + (filterKey === 'vulnerable_road_user' ? ' vulnerable-highlight' : '');
+
+                    const title = document.createElement('div');
+                    title.className = 'filter-title';
+                    const sectionId = filterKey.replace(/_/g, '');
+
+                    title.onclick = () => toggleSection(sectionId);
+                    const titleText = filterTitles[filterKey] || filterKey.replace(/_/g, ' ').toUpperCase();
+                    const infoIcon = filterInfoContent[filterKey] ?
+                        `<span class="info-icon" onclick="showInfoTooltip(event, '${filterKey}')">i</span>` : '';
+                    title.innerHTML = `<span>${titleText}${infoIcon}</span><span class="collapse-icon" id="${sectionId}-icon">▼</span>`;
+
+                    const options = document.createElement('div');
+                    options.className = 'filter-options';
+                    options.id = `${sectionId}-options`;
+                    options.style.display = 'block';
+
+                    values.forEach(value => {
+                        const label = document.createElement('label');
+                        label.className = 'filter-checkbox';
+                        const displayValue = value === '' ? '(Unknown)' : value;
+                        label.innerHTML = `
+                            <input type="checkbox" class="filter-check" data-filter="${markerDataKey}" value="${value}" checked onchange="scheduleFilter()">
+                            ${displayValue} (Loading...)
+                        `;
+                        options.appendChild(label);
+                    });
+
+                    section.appendChild(title);
+                    section.appendChild(options);
+                    filterSections.appendChild(section);
+                }
+            });
+
+            // Initialize year slider
+            var yearSlider = document.getElementById('yearSlider');
+            if (!yearSlider.noUiSlider) {
+                noUiSlider.create(yearSlider, {
+                    start: [2006, 2023],
+                    connect: true,
+                    range: { 'min': 2006, 'max': 2023 },
+                    step: 1,
+                    tooltips: [{to: v => Math.round(v)}, {to: v => Math.round(v)}]
+                });
+
+                var sliderInitialized = false;
+                yearSlider.noUiSlider.on('update', function(values) {
+                    currentYearRange = [Math.round(values[0]), Math.round(values[1])];
+                    if (sliderInitialized) scheduleFilter();
+                });
+
+                setTimeout(() => { sliderInitialized = true; }, 100);
+
+                document.getElementById('resetYear').onclick = () => {
+                    yearSlider.noUiSlider.set([2006, 2023]);
+                };
+            }
+
+            console.log('Filters initialized (will update counts as markers load)');
+        }
+
+        // Update filter counts as markers load
+        function updateFilterCounts() {
+            DIAG.log('FILTER-UPDATE', '▶️  updateFilterCounts() called', {allMarkersLength: allMarkers.length});
+            if (allMarkers.length === 0) {
+                DIAG.log('FILTER-UPDATE', '⚠️  Exiting early - no markers loaded yet');
+                return;
+            }
+
+            DIAG.log('FILTER-UPDATE', 'Calling calculateFilterCounts()...');
+            filterCounts = calculateFilterCounts(allMarkers);
+            DIAG.log('FILTER-UPDATE', '✅ Filter counts calculated', {filterKeys: Object.keys(filterCounts)});
+
+            // Update checkbox labels with counts
+            const checkboxes = document.querySelectorAll('.filter-check');
+            DIAG.log('FILTER-UPDATE', `Found ${checkboxes.length} checkboxes to update`);
+            checkboxes.forEach(cb => {
+                const filterKey = Object.keys(filterKeyMap).find(key => filterKeyMap[key] === cb.dataset.filter);
+                if (filterKey && filterCounts[filterKey]) {
+                    const count = filterCounts[filterKey][cb.value] || 0;
+                    const displayValue = cb.value === '' ? '(Unknown)' : cb.value;
+                    const collisionLabel = count === 1 ? 'collision' : 'collisions';
+                    const label = cb.parentElement;
+                    label.innerHTML = `
+                        <input type="checkbox" class="filter-check" data-filter="${cb.dataset.filter}" value="${cb.value}" ${cb.checked ? 'checked' : ''} onchange="scheduleFilter()">
+                        ${displayValue} (${count.toLocaleString()} ${collisionLabel})
+                    `;
+                }
+            });
+
+            // Update geographic dropdown (if function is defined)
+            if (typeof updateGeoDropdown === 'function') {
+                updateGeoDropdown(activeGeoType);
+            }
+
+            // Update display counts
+            var uniqueFiltered = new Set();
+            allMarkers.forEach(function(marker) {
+                var collisionId = marker.filterData.date + '_' + marker.filterData.lat + '_' + marker.filterData.lon;
+                uniqueFiltered.add(collisionId);
+            });
+
+            document.getElementById('yearDisplay').innerHTML =
+                `Showing: 2006-2023 (${allMarkers.length.toLocaleString()} parties from ${uniqueFiltered.size.toLocaleString()} collisions)`;
+            document.getElementById('filterCount').innerHTML =
+                `Showing: ${allMarkers.length.toLocaleString()} parties<br><span style="font-size:11px;">(${uniqueFiltered.size.toLocaleString()} collision events)</span>`;
+        }
+
+        function addMarkersBatched() {
+            console.log('Starting batch marker loading for', markersData.length, 'records');
+
+            // Calculate unique collision events
+            var uniqueCollisionIds = new Set();
+            markersData.forEach(function(data) {
+                var collisionId = data.date + '_' + data.lat + '_' + data.lon;
+                uniqueCollisionIds.add(collisionId);
+            });
+
+            console.log('Total party records:', markersData.length);
+            console.log('Unique collision events:', uniqueCollisionIds.size);
+
+            // Create marker cluster group
+            markerClusterGroup = L.markerClusterGroup({
+                chunkedLoading: true,
+                chunkInterval: 200,
+                chunkDelay: 50,
+                maxClusterRadius: 80,
+                disableClusteringAtZoom: 999,  // Never disable clustering to always allow spiderfying
+                spiderfyOnMaxZoom: true,
+                showCoverageOnHover: false,
+                zoomToBoundsOnClick: true,
+                spiderfyDistanceMultiplier: 2,  // Increased from 1.5 for better spread
+                iconCreateFunction: function(cluster) {
+                    // Count unique collisions instead of total markers (parties)
+                    var markers = cluster.getAllChildMarkers();
+                    var uniqueCollisions = new Set();
+                    markers.forEach(function(marker) {
+                        var collisionId = marker.filterData.date + '_' + marker.filterData.lat + '_' + marker.filterData.lon;
+                        uniqueCollisions.add(collisionId);
+                    });
+                    var count = uniqueCollisions.size;
+                    return L.divIcon({
+                        html: '<div style="background-color:#2196f3;color:white;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-weight:bold;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);">' + count + '</div>',
+                        className: 'custom-cluster-icon',
+                        iconSize: L.point(40, 40)
+                    });
+                }
+            });
+
+            // Create popup function
+            function createPopup(data) {
+                let collisionHeader = '';
+                if (data.num_parties && data.num_parties > 1) {
+                    collisionHeader = `<div style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+                        color: white; padding: 10px 15px; font-size: 13px; text-align: center;
+                        font-weight: 600; letter-spacing: 0.3px;">
+                        ⚠️ Multi-party collision (${data.num_parties} parties involved)
+                    </div>
+                    <div style="background: #fff9e6; padding: 8px 12px; font-size: 11px; color: #856404;
+                        border-left: 3px solid #ffc107; margin-bottom: 8px;">
+                        💡 This record shows one party in a ${data.num_parties}-party collision.
+                        Other markers at this location show additional parties.
+                    </div>`;
+                }
+
+                let personHeader = '';
+                if (data.invtype && data.invtype !== '') {
+                    personHeader = `<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white; padding: 12px 15px; font-size: 13px; text-align: center; font-weight: 500;">
+                        👤 ${data.invtype}`;
+                    if (data.invage && data.invage !== '' && data.invage !== 'unknown') {
+                        personHeader += ` <span style="opacity: 0.9;">(${data.invage})</span>`;
+                    }
+                    if (data.injury && data.injury !== '') {
+                        personHeader += ` - <strong>${data.injury} Injury</strong>`;
+                    }
+                    personHeader += '</div>';
+                }
+
+                let vehicleSection = '';
+                if (data.vehtype && data.vehtype !== '') {
+                    vehicleSection = `<div style="margin: 12px 0; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                        <div style="font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Vehicle</div>
+                        <div style="font-size: 13px; color: #333; font-weight: 500;">${data.vehtype}</div>`;
+
+                    if (data.manoeuver && data.manoeuver !== '') {
+                        vehicleSection += `<div style="font-size: 12px; color: #555; margin-top: 6px;">
+                            <strong>Manoeuver:</strong> ${data.manoeuver}`;
+                        if (data.initdir && data.initdir !== '') vehicleSection += ` from ${data.initdir}`;
+                        vehicleSection += '</div>';
+                    }
+                    if (data.drivact && data.drivact !== '') {
+                        vehicleSection += `<div style="font-size: 12px; color: #555; margin-top: 4px;">
+                            <strong>Action:</strong> ${data.drivact}
+                        </div>`;
+                    }
+                    vehicleSection += '</div>';
+                }
+
+                let partiesSection = '';
+                let parties = [];
+                if (data.pedestrian === 'Yes') parties.push('🚶 Pedestrian');
+                if (data.cyclist === 'Yes') parties.push('🚴 Cyclist');
+                if (data.vulnerable === 'Yes' && parties.length === 0) parties.push('⚠️ Vulnerable Road User');
+
+                if (parties.length > 0) {
+                    partiesSection = `<div style="margin: 12px 0; padding: 10px; background: #fff3e0; border-radius: 6px; border-left: 3px solid #ff9800;">
+                        <div style="font-size: 11px; color: #e65100; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Involved</div>
+                        <div style="font-size: 13px; color: #333;">${parties.join(', ')}</div>
+                    </div>`;
+                }
+
+                let factorsSection = '';
+                let factors = [];
+                if (data.speeding === 'Yes') factors.push('⚡ Speeding');
+                if (data.redlight === 'Yes') factors.push('🔴 Red Light');
+                if (data.ag_driv === 'Yes') factors.push('🚗 Aggressive Driving');
+                if (data.alcohol === 'Yes') factors.push('🍺 Alcohol');
+
+                if (factors.length > 0) {
+                    factorsSection = `<div style="margin: 12px 0; padding: 10px; background: #ffebee; border-radius: 6px; border-left: 3px solid #d32f2f;">
+                        <div style="font-size: 11px; color: #b71c1c; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Factors</div>
+                        <div style="font-size: 13px; color: #333;">${factors.join(', ')}</div>
+                    </div>`;
+                }
+
+                let conditionsSection = '';
+                let conditions = [];
+                if (data.light && data.light !== '') conditions.push('💡 ' + data.light);
+                if (data.visibility && data.visibility !== '') conditions.push('👁️ ' + data.visibility);
+                if (data.rdsfcond && data.rdsfcond !== '') conditions.push('🛣️ ' + data.rdsfcond);
+
+                if (conditions.length > 0) {
+                    conditionsSection = `<div style="margin: 12px 0; padding: 10px; background: #e3f2fd; border-radius: 6px; border-left: 3px solid #1976d2;">
+                        <div style="font-size: 11px; color: #0d47a1; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Conditions</div>
+                        <div style="font-size: 13px; color: #333;">${conditions.join(', ')}</div>
+                    </div>`;
+                }
+
+                return `<div style="min-width: 320px; max-width: 380px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                    ${collisionHeader}
+                    ${personHeader}
+                    <div style="background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);
+                        color: white; padding: 12px 15px; font-weight: 600; font-size: 14px;
+                        text-align: center; letter-spacing: 0.3px;">
+                        ${data.acclass}
+                    </div>
+                    <div style="padding: 15px;">
+                        <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 13px; margin-bottom: 12px;">
+                            <div style="color: #666; font-weight: 500;">Date:</div>
+                            <div style="color: #333; font-weight: 600;">${data.date}</div>
+
+                            <div style="color: #666; font-weight: 500;">Year:</div>
+                            <div style="color: #333; font-weight: 600;">${data.year}</div>
+
+                            <div style="color: #666; font-weight: 500;">Location:</div>
+                            <div style="color: #333; font-weight: 600;">${data.street}</div>
+
+                            <div style="color: #666; font-weight: 500;">Ward:</div>
+                            <div style="color: #333; font-weight: 600;">${(() => {
+                                if (!data.ward || data.ward === '') return '(Unknown)';
+                                const match = data.ward.match(/^(.+?)\s*\((\d+)\)$/);
+                                if (match) {
+                                    return `${match[1]} (Ward ${match[2]})`;
+                                }
+                                return data.ward;
+                            })()}</div>
+                        </div>
+                        ${vehicleSection}
+                        ${partiesSection}
+                        ${factorsSection}
+                        ${conditionsSection}
+                    </div>
+                </div>`;
+            }
+
+            // Create markers
+            console.time('Marker Creation');
+            markersData.forEach(function(data) {
+                // Use orange for multi-party collisions, blue for single-party
+                var isMultiParty = data.num_parties && data.num_parties > 1;
+                var marker = L.circleMarker([data.lat, data.lon], {
+                    radius: isMultiParty ? 6 : 5,
+                    fillColor: isMultiParty ? '#ff9800' : '#2196f3',
+                    color: '#fff',
+                    weight: isMultiParty ? 2 : 1,
+                    fillOpacity: 0.8
+                });
+
+                marker.bindPopup(createPopup(data));
+                marker.filterData = data;
+                allMarkers.push(marker);
+            });
+            console.timeEnd('Marker Creation');
+            console.log('Created', allMarkers.length, 'markers');
+
+            // Show a temporary loading overlay on the map
+            var loadingOverlay = document.createElement('div');
+            loadingOverlay.id = 'markerLoadingOverlay';
+            loadingOverlay.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255,255,255,0.95); padding: 20px 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1000; font-family: Arial, sans-serif;';
+            loadingOverlay.innerHTML = '<div style="text-align: center;"><div style="font-size: 16px; margin-bottom: 10px;">Loading collision markers...</div><div style="font-size: 14px; color: #666;">Please wait while we add ' + allMarkers.length.toLocaleString() + ' markers to the map</div></div>';
+            map.getContainer().appendChild(loadingOverlay);
+
+            console.log('Loading overlay shown, will add markers after delay...');
+
+            // Use setTimeout to allow the overlay to render, then add all markers at once
+            // MarkerCluster's built-in chunkedLoading will handle the batching
+            setTimeout(function() {
+                console.log('Adding all', allMarkers.length, 'markers to cluster group...');
+
+                // Add all markers at once - let MarkerCluster's chunkedLoading handle it
+                markerClusterGroup.addLayers(allMarkers);
+
+                // Add the cluster group to the map
+                map.addLayer(markerClusterGroup);
+
+                console.log('Cluster group added to map');
+
+                // Remove the loading overlay
+                setTimeout(function() {
+                    var overlay = document.getElementById('markerLoadingOverlay');
+                    if (overlay) {
+                        overlay.remove();
+                    }
+
+                    console.log('Initializing filters...');
+                    initializeFilters();
+                    console.log('Filters initialized');
+
+                    // Show controls now that everything is ready
+                    document.getElementById('yearControl').style.display = 'block';
+                    document.getElementById('filterPanel').style.display = 'block';
+                    console.log('Controls shown - map ready!');
+                }, 500);
+            }, 100);
+        }
+
+        // Human-readable title mapping
+        const filterTitles = {
+            'time_range': 'Time of Day',
+            'road_user_category': 'Road User',
+            'age_category': 'Ages',
+            'vulnerable_road_user': 'Vulnerable Road User',
+            'acclass': 'Collision Classification',
+            'invage': 'Person Age',
+            'pedestrian': 'Pedestrian Involved',
+            'cyclist': 'Cyclist Involved',
+            'speeding': 'Speeding Factor',
+            'redlight': 'Red Light Violation',
+            'drivcond': 'Driver Condition',
+            'visibility': 'Visibility',
+            'light': 'Lighting Conditions',
+            'rdsfcond': 'Road Surface Conditions',
+            'road_class': 'Road Classification',
+            'traffctl': 'Traffic Control',
+            'impactype': 'Impact Type'
+        };
+
+        // Info tooltip content
+        const filterInfoContent = {
+            'time_range': '<strong>Morning:</strong> 06:00 - 11:59<br><strong>Afternoon:</strong> 12:00 - 17:59<br><strong>Evening:</strong> 18:00 - 23:59<br><strong>Night:</strong> 00:00 - 05:59',
+            'road_user_category': '<strong>Pedestrian:</strong> Person on foot<br><strong>Cyclist:</strong> Person on bicycle<br><strong>Motorcyclist:</strong> Motorcycle driver/passenger<br><strong>Motorist:</strong> Car, truck, or bus occupant<br><strong>Micromobility:</strong> E-scooter, moped, skateboard, wheelchair<br><strong>Property Owner:</strong> Vehicles/property involved but person not physically present',
+            'age_category': '<strong>Children (0-14):</strong> Ages 0-14<br><strong>Youth (15-24):</strong> Ages 15-24<br><strong>Adults (25-64):</strong> Ages 25-64<br><strong>Seniors (65+):</strong> Ages 65 and older',
+            'acclass': '<strong>Fatal:</strong> At least one death<br><strong>Non-Fatal Injury:</strong> Injuries but no deaths<br><strong>Property Damage Only:</strong> No injuries or deaths',
+            'rdsfcond': '<strong>Dry:</strong> Road surface dry<br><strong>Wet:</strong> Wet from rain/melted snow<br><strong>Ice:</strong> Icy surface<br><strong>Snow:</strong> Snow covered<br><strong>Slush:</strong> Snow and water mixture',
+            'light': '<strong>Daylight:</strong> During daylight hours<br><strong>Dark:</strong> Night with no street lights<br><strong>Dark, artificial:</strong> Night with street lighting<br><strong>Dusk/Dawn:</strong> Twilight periods',
+            'visibility': '<strong>Clear:</strong> No visibility issues<br><strong>Rain:</strong> Rainfall reducing visibility<br><strong>Snow/Fog:</strong> Weather conditions affecting visibility',
+            'traffctl': '<strong>Traffic Signal:</strong> Signalized intersection<br><strong>Stop Sign:</strong> Stop sign control<br><strong>Yield Sign:</strong> Yield control<br><strong>No Control:</strong> No traffic control device',
+            'impactype': '<strong>Rear End:</strong> Struck from behind<br><strong>Angle:</strong> At an angle<br><strong>Sideswipe:</strong> Side contact<br><strong>Turning Movement:</strong> During a turn',
+            'drivcond': '<strong>Normal:</strong> No impairment<br><strong>Had Been Drinking:</strong> Alcohol detected<br><strong>Ability Impaired:</strong> Legally impaired<br><strong>Fatigue/Inattentive:</strong> Tired or distracted',
+            'pedestrian': '<strong>Yes:</strong> A pedestrian was involved in this collision<br><strong>No:</strong> No pedestrian involved',
+            'cyclist': '<strong>Yes:</strong> A cyclist was involved in this collision<br><strong>No:</strong> No cyclist involved',
+            'speeding': '<strong>Yes:</strong> Speeding was a contributing factor<br><strong>No:</strong> Speeding was not a factor',
+            'redlight': '<strong>Yes:</strong> Red light violation was a contributing factor<br><strong>No:</strong> No red light violation',
+            'vulnerable_road_user': '<strong>Yes:</strong> Includes pedestrians, cyclists, and micromobility users<br><strong>No:</strong> Only motorists, motorcyclists, or property owners involved',
+            'road_class': '<strong>Major Arterial:</strong> High-capacity roads<br><strong>Minor Arterial:</strong> Medium-capacity connecting roads<br><strong>Collector:</strong> Low-capacity local distributor roads<br><strong>Local:</strong> Residential streets',
+            'invage': 'Individual age values from the original dataset - use the "Ages" filter for categorized age groups instead'
+        };
+
+        // Show info tooltip
+        function showInfoTooltip(event, filterKey) {
+            event.stopPropagation();
+            const content = filterInfoContent[filterKey];
+            if (!content) return;
+
+            // Remove existing tooltips
+            document.querySelectorAll('.info-tooltip').forEach(t => t.remove());
+
+            // Create tooltip
+            const tooltip = document.createElement('div');
+            tooltip.className = 'info-tooltip active';
+            const title = filterTitles[filterKey] || filterKey.replace(/_/g, ' ').toUpperCase();
+            tooltip.innerHTML = `
+                <div class="info-tooltip-title">${title}</div>
+                <div class="info-tooltip-content">${content}</div>
+            `;
+
+            // Position near the icon
+            const rect = event.target.getBoundingClientRect();
+            tooltip.style.left = Math.min(rect.right + 10, window.innerWidth - 340) + 'px';
+            tooltip.style.top = rect.top + 'px';
+
+            document.body.appendChild(tooltip);
+
+            // Close on click outside
+            setTimeout(() => {
+                document.addEventListener('click', function closeTooltip() {
+                    tooltip.remove();
+                    document.removeEventListener('click', closeTooltip);
+                });
+            }, 100);
+        }
+
+        // Filter functions
+        function calculateFilterCounts(markers) {
+            DIAG.log('FILTER-CALC', `▶️  Processing ${markers.length} markers`);
+            DIAG.log('FILTER-CALC', 'filtersMetadata keys:', {count: Object.keys(filtersMetadata).length, keys: Object.keys(filtersMetadata).slice(0, 5).join(', ')});
+
+            var counts = {};
+            var collisionsByFilter = {};
+
+            markers.forEach(function(marker) {
+                var data = marker.filterData;
+                if (!data) {
+                    DIAG.error('FILTER-CALC', 'Marker missing filterData', marker);
+                    return;
+                }
+                var collisionId = data.date + '_' + data.lat + '_' + data.lon;
+
+                for (const [filterKey] of Object.entries(filtersMetadata)) {
+                    const filterNameLower = filterKey.toLowerCase();
+                    const markerDataKey = filterKeyMap[filterNameLower];
+
+                    if (!markerDataKey) {
+                        DIAG.log('FILTER-CALC', `⚠️  No markerDataKey for "${filterNameLower}"`);
+                        continue;
+                    }
+
+                    if (!collisionsByFilter[filterNameLower]) collisionsByFilter[filterNameLower] = {};
+
+                    let value = data[markerDataKey] || '';
+
+                    if (!collisionsByFilter[filterNameLower][value]) {
+                        collisionsByFilter[filterNameLower][value] = new Set();
+                    }
+                    collisionsByFilter[filterNameLower][value].add(collisionId);
+                }
+            });
+
+            for (const [filterName, valueMap] of Object.entries(collisionsByFilter)) {
+                counts[filterName] = {};
+                for (const [value, collisionSet] of Object.entries(valueMap)) {
+                    counts[filterName][value] = collisionSet.size;
+                }
+            }
+
+            DIAG.log('FILTER-CALC', '✅ Counts calculated for:', {filterKeys: Object.keys(counts)});
+            return counts;
+        }
+
+        function initializeFilters() {
+            filterCounts = calculateFilterCounts(allMarkers);
+
+            const filterSections = document.getElementById('filterSections');
+
+            // Clear existing filters to avoid duplicates
+            filterSections.innerHTML = '';
+
+            const filterOrder = ['geographic', 'time_range', 'road_user_category', 'age_category', 'acclass',
+                               'speeding', 'redlight', 'drivcond', 'visibility',
+                               'light', 'rdsfcond', 'road_class', 'traffctl', 'impactype'];
+
+            filterOrder.forEach(filterKey => {
+                if (filterKey === 'geographic') {
+                    // Create geographic selector section with toggle
+                    const section = document.createElement('div');
+                    section.className = 'filter-section';
+                    section.id = 'geoSection';
+
+                    const title = document.createElement('div');
+                    title.className = 'filter-title';
+                    title.style.cursor = 'default';
+                    title.innerHTML = 'GEOGRAPHIC AREA';
+
+                    // Create toggle buttons
+                    const toggleContainer = document.createElement('div');
+                    toggleContainer.className = 'geo-toggle-container';
+
+                    const wardBtn = document.createElement('button');
+                    wardBtn.className = 'geo-toggle-btn ward-btn active';
+                    wardBtn.textContent = 'Wards (25)';
+                    wardBtn.onclick = () => switchGeoType('ward');
+
+                    const divisionBtn = document.createElement('button');
+                    divisionBtn.className = 'geo-toggle-btn division-btn';
+                    divisionBtn.textContent = 'Divisions (16)';
+                    divisionBtn.onclick = () => switchGeoType('division');
+
+                    const neighbourhoodBtn = document.createElement('button');
+                    neighbourhoodBtn.className = 'geo-toggle-btn neighbourhood-btn';
+                    neighbourhoodBtn.textContent = 'Neighbourhoods (158)';
+                    neighbourhoodBtn.onclick = () => switchGeoType('neighbourhood');
+
+                    toggleContainer.appendChild(wardBtn);
+                    toggleContainer.appendChild(divisionBtn);
+                    toggleContainer.appendChild(neighbourhoodBtn);
+
+                    // Create dropdown container
+                    const dropdownContainer = document.createElement('div');
+                    dropdownContainer.id = 'geoDropdownContainer';
+
+                    section.appendChild(title);
+                    section.appendChild(toggleContainer);
+                    section.appendChild(dropdownContainer);
+                    filterSections.appendChild(section);
+
+                    // Initialize with ward dropdown
+                    updateGeoDropdown('ward');
+                } else if (filterKey === 'ward' || filterKey === 'division' || filterKey === 'neighbourhood') {
+                    // Skip - now handled by geographic selector
+                    return;
+                } else {
+                    const filterKeyUpper = filterKey.toUpperCase();
+                    const values = filtersMetadata[filterKeyUpper];
+                    if (!values) return;
+
+                    const markerDataKey = filterKeyMap[filterKey];
+                    const section = document.createElement('div');
+                    section.className = 'filter-section' + (filterKey === 'vulnerable_road_user' ? ' vulnerable-highlight' : '');
+
+                    const title = document.createElement('div');
+                    title.className = 'filter-title';
+                    const sectionId = filterKey.replace(/_/g, '');
+
+                    title.onclick = () => toggleSection(sectionId);
+                    const titleText = filterTitles[filterKey] || filterKey.replace(/_/g, ' ').toUpperCase();
+                    const infoIcon = filterInfoContent[filterKey] ?
+                        `<span class="info-icon" onclick="showInfoTooltip(event, '${filterKey}')">i</span>` : '';
+                    title.innerHTML = `<span>${titleText}${infoIcon}</span><span class="collapse-icon" id="${sectionId}-icon">▼</span>`;
+
+                    const options = document.createElement('div');
+                    options.className = 'filter-options';
+                    options.id = `${sectionId}-options`;
+                    options.style.display = 'block';
+
+                    values.forEach(value => {
+                        const count = filterCounts[filterKey][value] || 0;
+                        const label = document.createElement('label');
+                        label.className = 'filter-checkbox';
+                        const displayValue = value === '' ? '(Unknown)' : value;
+                        const collisionLabel = count === 1 ? 'collision' : 'collisions';
+                        label.innerHTML = `
+                            <input type="checkbox" class="filter-check" data-filter="${markerDataKey}" value="${value}" checked onchange="scheduleFilter()">
+                            ${displayValue} (${count.toLocaleString()} ${collisionLabel})
+                        `;
+                        options.appendChild(label);
+                    });
+
+                    section.appendChild(title);
+                    section.appendChild(options);
+                    filterSections.appendChild(section);
+                }
+            });
+
+            // Initialize year slider
+            var yearSlider = document.getElementById('yearSlider');
+            noUiSlider.create(yearSlider, {
+                start: [2006, 2023],
+                connect: true,
+                range: { 'min': 2006, 'max': 2023 },
+                step: 1,
+                tooltips: [{to: v => Math.round(v)}, {to: v => Math.round(v)}]
+            });
+
+            var sliderInitialized = false;
+            yearSlider.noUiSlider.on('update', function(values) {
+                currentYearRange = [Math.round(values[0]), Math.round(values[1])];
+                if (sliderInitialized) scheduleFilter();
+            });
+
+            setTimeout(() => { sliderInitialized = true; }, 100);
+
+            document.getElementById('resetYear').onclick = () => {
+                yearSlider.noUiSlider.set([2006, 2023]);
+            };
+        }
+
+        // Lazy load divisions when needed (saves 882KB on initial load)
+        var divisionsLoaded = false;
+        var divisionsLoading = false;
+
+        function loadDivisions(callback) {
+            if (divisionsLoaded) {
+                if (callback) callback();
+                return;
+            }
+
+            if (divisionsLoading) {
+                console.log('Divisions already loading...');
+                return;
+            }
+
+            divisionsLoading = true;
+            console.log('Loading divisions (882KB)...');
+
+            fetch('/api/divisions')
+                .then(r => r.json())
+                .then(data => {
+                    divisionsGeoJSON = data;
+
+                    // Create division layer
+                    divisionBoundariesLayer = L.geoJSON(divisionsGeoJSON, {
+                        style: {
+                            fillColor: '#A23B72',
+                            weight: 4,
+                            opacity: 0.85,
+                            color: '#A23B72',
+                            fillOpacity: 0.12
+                        },
+                        onEachFeature: function(feature, layer) {
+                            if (feature.properties) {
+                                var divName = feature.properties.DIV || feature.properties.DIVISION;
+                                var unitName = feature.properties.UNIT_NAME || '';
+                                var address = feature.properties.ADDRESS || '';
+
+                                layer.bindPopup(function() {
+                                    const collisionCount = (filterCounts && filterCounts['division']) ? (filterCounts['division'][divName] || 0) : 0;
+
+                                    var popupContent = '<div class="boundary-popup division-popup">' +
+                                        '<div class="boundary-popup-title">POLICE DIVISION</div>' +
+                                        '<div class="boundary-popup-name">' + divName + '</div>' +
+                                        '<div class="boundary-popup-meta">' + collisionCount.toLocaleString() + ' collisions</div>';
+
+                                    if (unitName) {
+                                        popupContent += '<div class="boundary-popup-meta" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e0e0e0;">' + unitName;
+                                        if (address) popupContent += '<br>' + address;
+                                        popupContent += '</div>';
+                                    }
+                                    popupContent += '</div>';
+
+                                    return popupContent;
+                                });
+                                divisionLayers[divName] = layer;
+
+                                layer.on('mouseover', function(e) {
+                                    e.target.setStyle({
+                                        weight: 5,
+                                        opacity: 1,
+                                        fillOpacity: 0.22
+                                    });
+                                });
+                                layer.on('mouseout', function(e) {
+                                    e.target.setStyle({
+                                        weight: 4,
+                                        opacity: 0.85,
+                                        fillOpacity: 0.12
+                                    });
+                                });
+                            }
+                        }
+                    });
+
+                    divisionsLoaded = true;
+                    divisionsLoading = false;
+                    console.log('Divisions loaded successfully');
+
+                    if (callback) callback();
+                })
+                .catch(error => {
+                    console.error('Error loading divisions:', error);
+                    divisionsLoading = false;
+                    alert('Failed to load division boundaries. Please try again.');
+                });
+        }
+
+        // Lazy load neighbourhoods when needed (saves 2MB on initial load)
+        var neighbourhoodsLoaded = false;
+        var neighbourhoodsLoading = false;
+
+        function loadNeighbourhoods(callback) {
+            if (neighbourhoodsLoaded) {
+                if (callback) callback();
+                return;
+            }
+
+            if (neighbourhoodsLoading) {
+                console.log('Neighbourhoods already loading...');
+                return;
+            }
+
+            neighbourhoodsLoading = true;
+            console.log('Loading neighbourhoods (2.0MB)...');
+
+            fetch('/api/neighbourhoods')
+                .then(r => r.json())
+                .then(data => {
+                    neighbourhoodsGeoJSON = data;
+
+                    // Create neighbourhood layer
+                    neighbourhoodBoundariesLayer = L.geoJSON(neighbourhoodsGeoJSON, {
+                        style: {
+                            fillColor: '#6A994E',
+                            weight: 2,
+                            opacity: 0.6,
+                            color: '#6A994E',
+                            fillOpacity: 0.08
+                        },
+                        onEachFeature: function(feature, layer) {
+                            if (feature.properties && feature.properties.AREA_NAME) {
+                                var areaName = feature.properties.AREA_NAME;
+                                var areaCode = feature.properties.AREA_SHORT_CODE || '';
+
+                                layer.bindPopup(function() {
+                                    const collisionCount = (filterCounts && filterCounts['neighbourhood']) ? (filterCounts['neighbourhood'][areaName] || 0) : 0;
+
+                                    var popupContent = '<div class="boundary-popup neighbourhood-popup">' +
+                                        '<div class="boundary-popup-title">NEIGHBOURHOOD</div>' +
+                                        '<div class="boundary-popup-name">' + areaName + '</div>' +
+                                        '<div class="boundary-popup-meta">' + collisionCount.toLocaleString() + ' collisions</div>';
+
+                                    if (areaCode) {
+                                        popupContent += '<div class="boundary-popup-meta" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e0e0e0;">Area Code: ' + areaCode + '</div>';
+                                    }
+                                    popupContent += '</div>';
+
+                                    return popupContent;
+                                });
+                                neighbourhoodLayers[areaName] = layer;
+
+                                layer.on('mouseover', function(e) {
+                                    e.target.setStyle({
+                                        weight: 3,
+                                        opacity: 0.9,
+                                        fillOpacity: 0.18
+                                    });
+                                });
+                                layer.on('mouseout', function(e) {
+                                    e.target.setStyle({
+                                        weight: 2,
+                                        opacity: 0.6,
+                                        fillOpacity: 0.08
+                                    });
+                                });
+                            }
+                        }
+                    });
+
+                    neighbourhoodsLoaded = true;
+                    neighbourhoodsLoading = false;
+                    console.log('Neighbourhoods loaded successfully');
+
+                    if (callback) callback();
+                })
+                .catch(error => {
+                    console.error('Error loading neighbourhoods:', error);
+                    neighbourhoodsLoading = false;
+                    alert('Failed to load neighbourhood boundaries. Please try again.');
+                });
+        }
+
+        function switchGeoType(geoType) {
+            activeGeoType = geoType;
+
+            // Update button styles
+            document.querySelectorAll('.geo-toggle-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            if (geoType === 'ward') {
+                document.querySelector('.ward-btn').classList.add('active');
+                toggleBoundaryLayer('wards', true);
+                toggleBoundaryLayer('divisions', false);
+                toggleBoundaryLayer('neighbourhoods', false);
+            } else if (geoType === 'division') {
+                document.querySelector('.division-btn').classList.add('active');
+                toggleBoundaryLayer('wards', false);
+                toggleBoundaryLayer('neighbourhoods', false);
+
+                // Lazy load divisions if not already loaded
+                if (!divisionsLoaded) {
+                    loadDivisions(function() {
+                        toggleBoundaryLayer('divisions', true);
+                        updateGeoDropdown(geoType);
+                        scheduleFilter();
+                    });
+                    // Early return - the callback will handle the rest
+                    return;
+                } else {
+                    toggleBoundaryLayer('divisions', true);
+                }
+            } else if (geoType === 'neighbourhood') {
+                document.querySelector('.neighbourhood-btn').classList.add('active');
+                toggleBoundaryLayer('wards', false);
+                toggleBoundaryLayer('divisions', false);
+
+                // Lazy load neighbourhoods if not already loaded
+                if (!neighbourhoodsLoaded) {
+                    loadNeighbourhoods(function() {
+                        toggleBoundaryLayer('neighbourhoods', true);
+                        updateGeoDropdown(geoType);
+                        scheduleFilter();
+                    });
+                    // Early return - the callback will handle the rest
+                    return;
+                } else {
+                    toggleBoundaryLayer('neighbourhoods', true);
+                }
+            }
+
+            // Update dropdown
+            updateGeoDropdown(geoType);
+
+            // Reset map view
+            map.setView([43.7, -79.4], 11);
+
+            // Re-filter
+            scheduleFilter();
+        }
+
+        function updateGeoDropdown(geoType) {
+            const container = document.getElementById('geoDropdownContainer');
+            container.innerHTML = '';
+
+            const dropdown = document.createElement('select');
+            dropdown.id = 'geoSelect';
+            dropdown.className = 'ward-select';
+            dropdown.onchange = function() {
+                highlightGeographic(geoType, this.value);
+                scheduleFilter();
+            };
+
+            const allOption = document.createElement('option');
+            allOption.value = 'ALL';
+
+            if (geoType === 'ward') {
+                allOption.textContent = 'All Wards';
+                dropdown.appendChild(allOption);
+                // Use filtersMetadata to preserve backend sorting order
+                filtersMetadata['WARD'].forEach(value => {
+                    const count = filterCounts['ward'][value] || 0;
+                    const option = document.createElement('option');
+                    option.value = value;
+
+                    let displayValue;
+                    if (value === '') {
+                        displayValue = '(Unknown)';
+                    } else {
+                        // Extract ward number from format "Name (X)"
+                        const match = value.match(/^(.+?)\s*\((\d+)\)$/);
+                        if (match) {
+                            const wardName = match[1];
+                            const wardNum = match[2];
+                            displayValue = `Ward ${wardNum}: ${wardName}`;
+                        } else {
+                            displayValue = value;
+                        }
+                    }
+
+                    const collisionLabel = count === 1 ? 'collision' : 'collisions';
+                    option.textContent = `${displayValue} (${count.toLocaleString()} ${collisionLabel})`;
+                    dropdown.appendChild(option);
+                });
+            } else if (geoType === 'division') {
+                allOption.textContent = 'All Divisions';
+                dropdown.appendChild(allOption);
+                Object.entries(filterCounts['division']).forEach(([value, count]) => {
+                    const option = document.createElement('option');
+                    option.value = value;
+                    const displayValue = value === '' ? '(Unknown)' : value;
+                    const collisionLabel = count === 1 ? 'collision' : 'collisions';
+                    option.textContent = `${displayValue} (${count.toLocaleString()} ${collisionLabel})`;
+                    dropdown.appendChild(option);
+                });
+            } else if (geoType === 'neighbourhood') {
+                allOption.textContent = 'All Neighbourhoods';
+                dropdown.appendChild(allOption);
+                Object.entries(filterCounts['neighbourhood']).forEach(([value, count]) => {
+                    const option = document.createElement('option');
+                    option.value = value;
+                    const displayValue = value === '' ? '(Unknown)' : value;
+                    const collisionLabel = count === 1 ? 'collision' : 'collisions';
+                    option.textContent = `${displayValue} (${count.toLocaleString()} ${collisionLabel})`;
+                    dropdown.appendChild(option);
+                });
+            }
+
+            container.appendChild(dropdown);
+        }
+
+        function highlightGeographic(geoType, value) {
+            if (geoType === 'ward') {
+                highlightWard(value);
+            } else if (geoType === 'division') {
+                highlightDivision(value);
+            } else if (geoType === 'neighbourhood') {
+                highlightNeighbourhood(value);
+            }
+        }
+
+        function highlightWard(wardName) {
+            // Reset all ward styles to default
+            wardBoundariesLayer.eachLayer(function(layer) {
+                layer.setStyle({
+                    fillColor: '#2E86AB',
+                    weight: 3,
+                    opacity: 0.8,
+                    color: '#2E86AB',
+                    fillOpacity: 0.15
+                });
+            });
+
+            // Highlight selected ward
+            if (wardName !== 'ALL' && wardLayers[wardName]) {
+                wardLayers[wardName].setStyle({
+                    fillColor: '#d32f2f',
+                    weight: 4,
+                    opacity: 1,
+                    color: '#d32f2f',
+                    fillOpacity: 0.3
+                });
+
+                var bounds = wardLayers[wardName].getBounds();
+                map.fitBounds(bounds, {
+                    padding: [80, 80],
+                    maxZoom: 13
+                });
+            } else if (wardName === 'ALL') {
+                map.setView([43.7, -79.4], 11);
+            }
+        }
+
+        function highlightDivision(divisionName) {
+            // Reset all division styles to default
+            divisionBoundariesLayer.eachLayer(function(layer) {
+                layer.setStyle({
+                    fillColor: '#A23B72',
+                    weight: 4,
+                    opacity: 0.85,
+                    color: '#A23B72',
+                    fillOpacity: 0.12
+                });
+            });
+
+            // Highlight selected division
+            if (divisionName !== 'ALL' && divisionLayers[divisionName]) {
+                divisionLayers[divisionName].setStyle({
+                    fillColor: '#d32f2f',
+                    weight: 5,
+                    opacity: 1,
+                    color: '#d32f2f',
+                    fillOpacity: 0.3
+                });
+
+                var bounds = divisionLayers[divisionName].getBounds();
+                map.fitBounds(bounds, {
+                    padding: [80, 80],
+                    maxZoom: 13
+                });
+            } else if (divisionName === 'ALL') {
+                map.setView([43.7, -79.4], 11);
+            }
+        }
+
+        function highlightNeighbourhood(neighbourhoodName) {
+            // Reset all neighbourhood styles to default
+            neighbourhoodBoundariesLayer.eachLayer(function(layer) {
+                layer.setStyle({
+                    fillColor: '#6A994E',
+                    weight: 2,
+                    opacity: 0.6,
+                    color: '#6A994E',
+                    fillOpacity: 0.08
+                });
+            });
+
+            // Highlight selected neighbourhood
+            if (neighbourhoodName !== 'ALL' && neighbourhoodLayers[neighbourhoodName]) {
+                neighbourhoodLayers[neighbourhoodName].setStyle({
+                    fillColor: '#d32f2f',
+                    weight: 3,
+                    opacity: 1,
+                    color: '#d32f2f',
+                    fillOpacity: 0.3
+                });
+
+                var bounds = neighbourhoodLayers[neighbourhoodName].getBounds();
+                map.fitBounds(bounds, {
+                    padding: [80, 80],
+                    maxZoom: 13
+                });
+            } else if (neighbourhoodName === 'ALL') {
+                map.setView([43.7, -79.4], 11);
+            }
+        }
+
+        function scheduleFilter() {
+            if (filterTimeoutId) clearTimeout(filterTimeoutId);
+            filterTimeoutId = setTimeout(applyFilters, 150);
+        }
+
+        function applyFilters() {
+            console.time('Filter Time');
+
+            const geoSelect = document.getElementById('geoSelect');
+            const selectedGeo = geoSelect ? geoSelect.value : 'ALL';
+
+            const activeFilters = {};
+            document.querySelectorAll('.filter-check:checked').forEach(cb => {
+                if (!activeFilters[cb.dataset.filter]) activeFilters[cb.dataset.filter] = [];
+                activeFilters[cb.dataset.filter].push(cb.value);
+            });
+
+            // Filter by year and other filters (but NOT geography) for calculating geographic counts
+            const yearFilteredMarkers = allMarkers.filter(marker => {
+                const data = marker.filterData;
+                if (data.year < currentYearRange[0] || data.year > currentYearRange[1]) return false;
+                return true;
+            });
+
+            const yearAndGeoFilteredMarkers = allMarkers.filter(marker => {
+                const data = marker.filterData;
+                if (data.year < currentYearRange[0] || data.year > currentYearRange[1]) return false;
+
+                // Apply geographic filter based on active type
+                if (selectedGeo !== 'ALL') {
+                    if (activeGeoType === 'ward' && data.ward !== selectedGeo) return false;
+                    if (activeGeoType === 'division' && data.division !== selectedGeo) return false;
+                    if (activeGeoType === 'neighbourhood' && data.neighbourhood !== selectedGeo) return false;
+                }
+                return true;
+            });
+
+            // Calculate counts from yearFilteredMarkers for non-geographic filters
+            const updatedCounts = calculateFilterCounts(yearFilteredMarkers);
+
+            // Calculate geographic counts separately (excluding geographic filter but including other filters)
+            const yearAndOtherFiltersMarkers = yearFilteredMarkers.filter(marker => {
+                const data = marker.filterData;
+                for (const [filterName, allowedValues] of Object.entries(activeFilters)) {
+                    let value = data[filterName] || '';
+                    if (!allowedValues.includes(value)) return false;
+                }
+                return true;
+            });
+            const geoCounts = calculateFilterCounts(yearAndOtherFiltersMarkers);
+
+            const filteredMarkers = yearAndGeoFilteredMarkers.filter(marker => {
+                const data = marker.filterData;
+                for (const [filterName, allowedValues] of Object.entries(activeFilters)) {
+                    let value = data[filterName] || '';
+                    if (!allowedValues.includes(value)) return false;
+                }
+                return true;
+            });
+
+            markerClusterGroup.clearLayers();
+            markerClusterGroup.addLayers(filteredMarkers);
+
+            var uniqueFiltered = new Set();
+            filteredMarkers.forEach(function(marker) {
+                var collisionId = marker.filterData.date + '_' + marker.filterData.lat + '_' + marker.filterData.lon;
+                uniqueFiltered.add(collisionId);
+            });
+
+            document.querySelectorAll('.filter-check').forEach(cb => {
+                const filterKey = Object.keys(filterKeyMap).find(key => filterKeyMap[key] === cb.dataset.filter);
+                if (filterKey && updatedCounts[filterKey]) {
+                    const count = updatedCounts[filterKey][cb.value] || 0;
+                    const displayValue = cb.value === '' ? '(Unknown)' : cb.value;
+                    const collisionLabel = count === 1 ? 'collision' : 'collisions';
+                    const label = cb.parentElement;
+                    label.innerHTML = `
+                        <input type="checkbox" class="filter-check" data-filter="${cb.dataset.filter}" value="${cb.value}" ${cb.checked ? 'checked' : ''} onchange="scheduleFilter()">
+                        ${displayValue} (${count.toLocaleString()} ${collisionLabel})
+                    `;
+                }
+            });
+
+            // Update geographic dropdown with new counts (using geoCounts which excludes geographic filter)
+            if (geoSelect && geoCounts[activeGeoType]) {
+                const currentSelection = geoSelect.value;
+                geoSelect.innerHTML = '';
+
+                const allOption = document.createElement('option');
+                allOption.value = 'ALL';
+
+                if (activeGeoType === 'ward') {
+                    allOption.textContent = 'All Wards';
+                    geoSelect.appendChild(allOption);
+
+                    // Use filtersMetadata to preserve backend sorting order
+                    filtersMetadata['WARD'].forEach(value => {
+                        const count = geoCounts['ward'][value] || 0;
+                        const option = document.createElement('option');
+                        option.value = value;
+
+                        let displayValue;
+                        if (value === '') {
+                            displayValue = '(Unknown)';
+                        } else {
+                            // Extract ward number from format "Name (X)"
+                            const match = value.match(/^(.+?)\s*\((\d+)\)$/);
+                            if (match) {
+                                const wardName = match[1];
+                                const wardNum = match[2];
+                                displayValue = `Ward ${wardNum}: ${wardName}`;
+                            } else {
+                                displayValue = value;
+                            }
+                        }
+
+                        const collisionLabel = count === 1 ? 'collision' : 'collisions';
+                        option.textContent = `${displayValue} (${count.toLocaleString()} ${collisionLabel})`;
+                        geoSelect.appendChild(option);
+                    });
+                } else if (activeGeoType === 'division') {
+                    allOption.textContent = 'All Divisions';
+                    geoSelect.appendChild(allOption);
+
+                    // Use filtersMetadata to preserve backend sorting order
+                    filtersMetadata['DIVISION'].forEach(value => {
+                        const count = geoCounts['division'][value] || 0;
+                        const option = document.createElement('option');
+                        option.value = value;
+                        const displayValue = value === '' ? '(Unknown)' : value;
+                        const collisionLabel = count === 1 ? 'collision' : 'collisions';
+                        option.textContent = `${displayValue} (${count.toLocaleString()} ${collisionLabel})`;
+                        geoSelect.appendChild(option);
+                    });
+                } else if (activeGeoType === 'neighbourhood') {
+                    allOption.textContent = 'All Neighbourhoods';
+                    geoSelect.appendChild(allOption);
+
+                    // Use filtersMetadata to preserve backend sorting order
+                    filtersMetadata['NEIGHBOURHOOD'].forEach(value => {
+                        const count = geoCounts['neighbourhood'][value] || 0;
+                        const option = document.createElement('option');
+                        option.value = value;
+                        const displayValue = value === '' ? '(Unknown)' : value;
+                        const collisionLabel = count === 1 ? 'collision' : 'collisions';
+                        option.textContent = `${displayValue} (${count.toLocaleString()} ${collisionLabel})`;
+                        geoSelect.appendChild(option);
+                    });
+                }
+
+                geoSelect.value = currentSelection;
+            }
+
+            const yearText = currentYearRange[0] === currentYearRange[1] ?
+                            currentYearRange[0] : `${currentYearRange[0]}-${currentYearRange[1]}`;
+            document.getElementById('yearDisplay').innerHTML =
+                `Showing: ${yearText} (${filteredMarkers.length.toLocaleString()} parties from ${uniqueFiltered.size.toLocaleString()} collisions)`;
+            document.getElementById('filterCount').innerHTML =
+                `Showing: ${filteredMarkers.length.toLocaleString()} parties<br><span style="font-size:11px;">(${uniqueFiltered.size.toLocaleString()} collision events)</span>`;
+
+            // Update filterCounts with geographic counts (excludes geographic filter) so boundary popups show correct values
+            filterCounts = geoCounts;
+
+            // Refresh any open boundary popups to show updated collision counts
+            map.eachLayer(function(layer) {
+                if (layer.getPopup && layer.getPopup() && layer.getPopup().isOpen()) {
+                    layer.getPopup().update();
+                }
+            });
+
+            console.timeEnd('Filter Time');
+        }
+
+        function toggleSection(name) {
+            const options = document.getElementById(name + '-options');
+            const icon = document.getElementById(name + '-icon');
+            if (options && icon) {
+                if (options.style.display === 'none') {
+                    options.style.display = 'block';
+                    icon.textContent = '▼';
+                } else {
+                    options.style.display = 'none';
+                    icon.textContent = '▶';
+                }
+            }
+        }
+
+        function resetAllFilters() {
+            document.querySelectorAll('.filter-check').forEach(cb => cb.checked = true);
+            const geoSelect = document.getElementById('geoSelect');
+            if (geoSelect) {
+                geoSelect.value = 'ALL';
+                if (activeGeoType === 'ward') {
+                    highlightWard('ALL');
+                } else if (activeGeoType === 'division') {
+                    highlightDivision('ALL');
+                } else if (activeGeoType === 'neighbourhood') {
+                    highlightNeighbourhood('ALL');
+                }
+            }
+            document.getElementById('yearSlider').noUiSlider.set([2006, 2023]);
+            setTimeout(() => applyFilters(), 150);
+        }
+
+        function toggleBoundaryLayer(layerType, show) {
+            if (layerType === 'wards') {
+                if (show) {
+                    map.addLayer(wardBoundariesLayer);
+                } else {
+                    map.removeLayer(wardBoundariesLayer);
+                }
+            } else if (layerType === 'divisions') {
+                if (show) {
+                    map.addLayer(divisionBoundariesLayer);
+                } else {
+                    map.removeLayer(divisionBoundariesLayer);
+                }
+            } else if (layerType === 'neighbourhoods') {
+                if (show) {
+                    map.addLayer(neighbourhoodBoundariesLayer);
+                } else {
+                    map.removeLayer(neighbourhoodBoundariesLayer);
+                }
+            }
+        }
+
+        // ============================================================================
+        // GLOBAL ERROR HANDLING & DIAGNOSTICS
+        // ============================================================================
+
+        // Catch all unhandled errors
+        window.addEventListener('error', function(event) {
+            DIAG.error('GLOBAL', 'Unhandled JavaScript error', {
+                message: event.message,
+                filename: event.filename,
+                lineno: event.lineno,
+                colno: event.colno,
+                error: event.error
+            });
+        });
+
+        // Catch all unhandled promise rejections
+        window.addEventListener('unhandledrejection', function(event) {
+            DIAG.error('GLOBAL', 'Unhandled promise rejection', event.reason);
+        });
+
+        // Print diagnostic summary after 10 seconds
+        setTimeout(function() {
+            console.log('\n\n');
+            DIAG.summary();
+            console.log('Current state:');
+            console.log('  - allMarkers.length:', allMarkers.length);
+            console.log('  - markersData.length:', markersData?.length || 0);
+            console.log('  - filterCounts:', filterCounts ? 'defined' : 'undefined');
+            console.log('  - filtersMetadata keys:', filtersMetadata ? Object.keys(filtersMetadata).length : 0);
+            console.log('\nTo see all diagnostic events: DIAG.events');
+            console.log('To see summary again: DIAG.summary()');
+        }, 10000);
+    </script>
+</body>
+</html>

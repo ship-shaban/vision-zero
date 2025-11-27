@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Vision Zero - Toronto Collision Map</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <style>
+        body { margin: 0; font-family: Arial, sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; left: 0; right: 0; }
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: white; padding: 40px; border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2); z-index: 10000;
+            text-align: center; font-size: 18px;
+        }
+        #filterPanel {
+            position: absolute; top: 20px; left: 20px; background: white;
+            padding: 20px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 1000; width: 300px; max-height: 90vh; overflow-y: auto;
+        }
+        .filter-section { margin-bottom: 15px; }
+        .filter-title { font-weight: bold; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="loading">
+        <div>Loading Vision Zero Map...</div>
+        <div id="status" style="margin-top: 15px; font-size: 14px; color: #666;">Initializing...</div>
+    </div>
+
+    <div id="filterPanel" style="display: none;">
+        <h3 style="margin-top: 0;">FILTERS</h3>
+        <div id="filterStatus">Loading filters...</div>
+        <div id="filterContent"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([43.7, -79.4], 11);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        const status = document.getElementById('status');
+        let allMarkers = [];
+        let markerClusterGroup = null;
+
+        // Step 1: Load wards and show map
+        status.textContent = 'Loading map boundaries...';
+        fetch('/api/wards')
+            .then(r => r.json())
+            .then(wards => {
+                // Add ward boundaries
+                L.geoJSON(wards, {
+                    style: { fillColor: '#2E86AB', weight: 2, opacity: 0.6, fillOpacity: 0.1 }
+                }).addTo(map);
+
+                status.textContent = 'Loading filters...';
+                return fetch('/api/filters');
+            })
+            .then(r => r.json())
+            .then(filters => {
+                // Show filter panel immediately
+                document.getElementById('filterPanel').style.display = 'block';
+                document.getElementById('filterStatus').textContent = 'Filters ready! Loading collision data...';
+
+                // Hide main loading screen
+                document.getElementById('loading').style.display = 'none';
+
+                // Load markers in background
+                status.textContent = 'Loading collision markers...';
+                return fetch('/api/markers');
+            })
+            .then(r => r.json())
+            .then(markers => {
+                console.log('Loaded', markers.length, 'markers');
+                document.getElementById('filterStatus').textContent = `Loaded ${markers.length.toLocaleString()} collision records`;
+
+                // Create cluster group
+                markerClusterGroup = L.markerClusterGroup({
+                    maxClusterRadius: 80,
+                    spiderfyOnMaxZoom: true
+                });
+
+                // Add markers in chunks to prevent freeze
+                const CHUNK_SIZE = 2000;
+                let index = 0;
+
+                function addChunk() {
+                    const end = Math.min(index + CHUNK_SIZE, markers.length);
+                    const chunk = markers.slice(index, end);
+
+                    chunk.forEach(data => {
+                        const marker = L.circleMarker([data.lat, data.lon], {
+                            radius: 5,
+                            fillColor: '#2196f3',
+                            color: '#fff',
+                            weight: 1,
+                            fillOpacity: 0.7
+                        });
+                        marker.bindPopup(`
+                            <strong>${data.acclass}</strong><br>
+                            Date: ${data.date}<br>
+                            Location: ${data.street}
+                        `);
+                        allMarkers.push(marker);
+                    });
+
+                    index = end;
+                    document.getElementById('filterStatus').textContent =
+                        `Processing markers: ${index.toLocaleString()}/${markers.length.toLocaleString()}`;
+
+                    if (index < markers.length) {
+                        setTimeout(addChunk, 50);
+                    } else {
+                        markerClusterGroup.addLayers(allMarkers);
+                        map.addLayer(markerClusterGroup);
+                        document.getElementById('filterStatus').textContent =
+                            `✓ Loaded ${markers.length.toLocaleString()} collision records`;
+                        console.log('All markers loaded!');
+                    }
+                }
+
+                addChunk();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                status.textContent = 'Error loading data: ' + error.message;
+            });
+    </script>
+</body>
+</html>

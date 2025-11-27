@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# Flask
+instance/
+.webassets-cache
+
+# Cache files
+*.pkl
+*.parquet
+processed_collisions_cache*.pkl
+processed_collisions_cache*.parquet
+processed_collisions_cache.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Playwright MCP
+.playwright-mcp/
+
+# Claude Code
+.claude/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*.backup
+
+# Large data files that exceed GitHub's 100 MB limit
+collision_speed_limit_map.html
+collision_speed_limit_map_v2.html
+collision_speed_limit_map_OPTIMIZED.html
+Centreline/Centreline - Version 2 - 4326.geojson
+Vehicle volume/svc_raw_data_speed_2015_2019.csv
+Vehicle volume/svc_raw_data_speed_2020_2024.csv
+Vehicle volume/svc_raw_data_speed_2025_2029.csv
+Vehicle volume/svc_raw_data_volume_2015_2019.csv
+
+# Documentation archive
+docs/archive/

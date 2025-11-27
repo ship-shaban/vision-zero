@@ -1,0 +1,7 @@
+{
+  "total_tests": 20,
+  "significant_patterns": 0,
+  "bonferroni_threshold": 0.0005,
+  "sample_size": 15674,
+  "date_range": "2006-2019 (Pre-COVID)"
+}

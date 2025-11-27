@@ -1,0 +1,1 @@
+test_id,description,period,variable_1,variable_2,sample_size_total,sample_size_used,pct_missing,contingency_table,chi_square,dof,p_value_raw,p_value_bonferroni_adjusted,significant,cramers_v,effect_size_category,relative_risk,odds_ratio,rr_95ci,or_95ci,interpretation

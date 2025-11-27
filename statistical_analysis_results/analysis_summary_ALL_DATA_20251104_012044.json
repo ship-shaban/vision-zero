@@ -1,0 +1,7 @@
+{
+  "total_tests": 20,
+  "significant_patterns": 10,
+  "bonferroni_threshold": 0.0005,
+  "sample_size": 18351,
+  "date_range": "2006-2023 (ALL DATA INCLUDING COVID)"
+}

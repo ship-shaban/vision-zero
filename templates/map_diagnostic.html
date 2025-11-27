@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Vision Zero - Diagnostic Mode</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <style>
+        body { margin: 0; font-family: Arial, sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; left: 0; right: 50%; }
+        #console {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            right: 0;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .log { margin: 2px 0; }
+        .log.error { color: #f48771; }
+        .log.success { color: #89d185; }
+        .log.info { color: #6796e6; }
+        #loading {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="console">
+        <h3 style="color: #fff; margin-top: 0;">Diagnostic Console</h3>
+        <div id="logs"></div>
+    </div>
+
+    <div id="loading">
+        <div><strong>Loading Status</strong></div>
+        <div id="status">Initializing...</div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+    <script>
+        // Enhanced logging
+        const logsEl = document.getElementById('logs');
+        const statusEl = document.getElementById('status');
+
+        function log(message, type = 'info') {
+            console.log(message);
+            const logDiv = document.createElement('div');
+            logDiv.className = `log ${type}`;
+            logDiv.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logsEl.appendChild(logDiv);
+            logsEl.scrollTop = logsEl.scrollHeight;
+        }
+
+        function updateStatus(msg) {
+            statusEl.textContent = msg;
+            log(msg, 'info');
+        }
+
+        // Override console.error to catch all errors
+        const originalError = console.error;
+        console.error = function(...args) {
+            log('ERROR: ' + args.join(' '), 'error');
+            originalError.apply(console, args);
+        };
+
+        // Catch unhandled errors
+        window.addEventListener('error', function(e) {
+            log(`UNHANDLED ERROR: ${e.message} at ${e.filename}:${e.lineno}`, 'error');
+        });
+
+        // Initialize map
+        log('Initializing map...', 'info');
+        const map = L.map('map').setView([43.7, -79.4], 11);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        log('Map initialized', 'success');
+
+        const markerClusterGroup = L.markerClusterGroup({
+            maxClusterRadius: 80,
+            spiderfyOnMaxZoom: true
+        });
+        map.addLayer(markerClusterGroup);
+        log('Marker cluster group created', 'success');
+
+        let allMarkers = [];
+        let totalMarkers = 0;
+        let totalLoaded = 0;
+        let offset = 0;
+        const BATCH_SIZE = 1000;
+
+        function loadBatch() {
+            updateStatus(`Loading batch: offset ${offset}, limit ${BATCH_SIZE}`);
+
+            const url = `/api/markers?offset=${offset}&limit=${BATCH_SIZE}`;
+            log(`Fetching: ${url}`, 'info');
+
+            fetch(url)
+                .then(r => {
+                    log(`Response received: ${r.status} ${r.statusText}`, r.ok ? 'success' : 'error');
+                    return r.json();
+                })
+                .then(data => {
+                    log(`Data parsed. Keys: ${Object.keys(data).join(', ')}`, 'info');
+                    log(`Total markers in DB: ${data.total}`, 'info');
+                    log(`Batch size: ${data.markers.length}`, 'info');
+                    log(`Has more: ${data.hasMore}`, 'info');
+
+                    const batch = data.markers;
+                    totalMarkers = data.total;
+                    totalLoaded += batch.length;
+
+                    try {
+                        log(`Creating ${batch.length} markers...`, 'info');
+
+                        batch.forEach((markerData, idx) => {
+                            try {
+                                const marker = L.circleMarker([markerData.lat, markerData.lon], {
+                                    radius: 5,
+                                    fillColor: '#2196f3',
+                                    color: '#fff',
+                                    weight: 1,
+                                    fillOpacity: 0.7
+                                });
+
+                                marker.bindPopup(`
+                                    <strong>${markerData.acclass}</strong><br>
+                                    Date: ${markerData.date}<br>
+                                    Location: ${markerData.street}
+                                `);
+
+                                allMarkers.push(marker);
+                            } catch (err) {
+                                log(`Error creating marker ${idx}: ${err.message}`, 'error');
+                                throw err;
+                            }
+                        });
+
+                        log(`Created ${batch.length} markers successfully`, 'success');
+
+                        log(`Adding ${batch.length} markers to cluster...`, 'info');
+                        markerClusterGroup.addLayers(batch.map((d, i) => allMarkers[allMarkers.length - batch.length + i]));
+                        log(`Markers added to cluster`, 'success');
+
+                        updateStatus(`Loaded ${totalLoaded}/${totalMarkers} markers`);
+
+                        // Load next batch
+                        if (data.hasMore) {
+                            offset += BATCH_SIZE;
+                            log(`Scheduling next batch (offset ${offset})...`, 'info');
+                            setTimeout(loadBatch, 500);
+                        } else {
+                            log(`ALL MARKERS LOADED! Total: ${totalLoaded}`, 'success');
+                            updateStatus(`✓ Loaded all ${totalLoaded} markers`);
+                            document.getElementById('loading').style.display = 'none';
+                        }
+                    } catch (error) {
+                        log(`ERROR processing batch: ${error.message}`, 'error');
+                        log(`Stack trace: ${error.stack}`, 'error');
+                        updateStatus(`ERROR: ${error.message}`);
+                    }
+                })
+                .catch(error => {
+                    log(`FETCH ERROR: ${error.message}`, 'error');
+                    log(`Stack trace: ${error.stack}`, 'error');
+                    updateStatus(`Fetch error: ${error.message}`);
+                });
+        }
+
+        // Start loading
+        log('Starting batch loading...', 'info');
+        loadBatch();
+    </script>
+</body>
+</html>

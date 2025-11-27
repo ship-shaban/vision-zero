@@ -1,0 +1,2194 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Toronto KSI Collisions - Interactive Map</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- noUiSlider CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/nouislider@15.7.1/dist/nouislider.min.css" />
+    <!-- Space Grotesk Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 320px;
+            right: 0;
+        }
+
+        #sidebar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 320px;
+            background: white;
+            overflow-y: auto;
+            overflow-x: hidden;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #007bff;
+            color: white;
+            padding: 40px 60px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            z-index: 10000;
+            font-size: 20px;
+            font-weight: 600;
+            text-align: center;
+            min-width: 320px;
+        }
+
+        #loading::after {
+            content: '';
+            display: block;
+            width: 40px;
+            height: 40px;
+            margin: 20px auto 0;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .sidebar-header {
+            background: #007bff;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .sidebar-header h1 {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .sidebar-header p {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .sidebar-header a {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            transition: background 0.3s;
+            width: 100%;
+            text-align: center;
+        }
+
+        .sidebar-header a:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .share-btn {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+            text-align: center;
+        }
+
+        .share-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .share-notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #28a745;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 10001;
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        .share-notification.show {
+            opacity: 1;
+        }
+
+        .collision-count-display {
+            padding: 15px 20px;
+            background: #fff3e0;
+            border-bottom: 2px solid #ff9800;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        .collision-count-label {
+            color: #666;
+            font-weight: 500;
+            margin-right: 5px;
+        }
+
+        .collision-count-value {
+            color: #d32f2f;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .year-control {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .year-control-title {
+            color: #d32f2f;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 15px;
+        }
+
+        #yearSlider {
+            margin: 35px 0 15px 0;
+        }
+
+        /* Slider color customization - blue connect bar only */
+        #yearSlider .noUi-connect {
+            background: #007bff;
+        }
+
+        /* Ensure slider tooltips don't overlap with title */
+        #yearSlider .noUi-tooltip {
+            font-size: 12px;
+            padding: 4px 8px;
+        }
+
+        #yearDisplay {
+            font-size: 13px;
+            text-align: center;
+            margin: 12px 0 0 0;
+            padding: 8px;
+            background: white;
+            border-radius: 6px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .filter-section {
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .filter-header {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #495057;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+
+        .filter-header:hover {
+            background: #e9ecef;
+        }
+
+        .filter-header .toggle-icon {
+            font-size: 10px;
+            transition: transform 0.2s;
+        }
+
+        .filter-header.collapsed .toggle-icon {
+            transform: rotate(-90deg);
+        }
+
+        .filter-title-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tooltip-icon {
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .tooltip-icon svg {
+            width: 18px;
+            height: 18px;
+            fill: #007bff;
+            transition: all 0.2s;
+        }
+
+        .tooltip-icon:hover svg {
+            fill: #0056b3;
+            transform: scale(1.1);
+        }
+
+        .tooltip-popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            padding: 20px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            z-index: 10000;
+        }
+
+        .tooltip-popup.active {
+            display: block;
+        }
+
+        .tooltip-popup-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+        }
+
+        .tooltip-popup-overlay.active {
+            display: block;
+        }
+
+        .tooltip-popup-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .tooltip-popup-title {
+            font-weight: bold;
+            color: #007bff;
+            font-size: 16px;
+        }
+
+        .tooltip-popup-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #6c757d;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .tooltip-popup-close:hover {
+            background: #f0f0f0;
+            color: #000;
+        }
+
+        .tooltip-popup-content {
+            color: #333;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        .filter-options {
+            max-height: 400px;
+            overflow-y: auto;
+            transition: max-height 0.3s ease;
+        }
+
+        .filter-options.collapsed {
+            max-height: 0;
+            overflow: hidden;
+        }
+
+        .filter-checkbox {
+            display: flex;
+            align-items: center;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border-bottom: 1px solid #f8f9fa;
+        }
+
+        .filter-checkbox:hover {
+            background: #f8f9fa;
+        }
+
+        .filter-checkbox input[type="checkbox"] {
+            margin-right: 10px;
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+
+        .filter-checkbox label {
+            flex: 1;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        .filter-label-text {
+            flex: 1;
+            color: #333;
+        }
+
+        .filter-count {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            min-width: 30px;
+            text-align: center;
+        }
+
+        .filter-count.loading {
+            background: #f5f5f5;
+            color: #999;
+        }
+
+        .cluster-marker {
+            background: #007bff;
+            border: 3px solid white;
+            border-radius: 50%;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            font-size: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .cluster-marker-small {
+            width: 40px;
+            height: 40px;
+            font-size: 14px;
+        }
+
+        .cluster-marker-medium {
+            width: 50px;
+            height: 50px;
+            font-size: 16px;
+        }
+
+        .cluster-marker-large {
+            width: 60px;
+            height: 60px;
+            font-size: 18px;
+        }
+
+        /* Skip link for keyboard accessibility */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: #007bff;
+            color: white;
+            padding: 8px 16px;
+            text-decoration: none;
+            z-index: 100000;
+            font-weight: 600;
+            border-radius: 0 0 4px 4px;
+        }
+
+        .skip-link:focus {
+            top: 0;
+        }
+
+        .clear-filters-btn {
+            margin: 15px 20px;
+            padding: 10px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            color: #495057;
+            transition: all 0.2s;
+        }
+
+        .clear-filters-btn:hover {
+            background: #e9ecef;
+            border-color: #adb5bd;
+        }
+
+        .clear-filters-btn:active {
+            transform: scale(0.98);
+        }
+
+        .data-quality-notice {
+            margin: 15px 20px;
+            padding: 0;
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            border-left: 4px solid #2196f3;
+            border-radius: 6px;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .data-quality-notice-header {
+            padding: 12px 15px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+
+        .data-quality-notice-header:hover {
+            background: rgba(33, 150, 243, 0.08);
+        }
+
+        .data-quality-notice-header strong {
+            color: #1976d2;
+            font-size: 13px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .data-quality-notice-toggle {
+            color: #1976d2;
+            font-size: 16px;
+            transition: transform 0.2s ease;
+        }
+
+        .data-quality-notice-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .data-quality-notice-content {
+            padding: 0 15px 15px 15px;
+            max-height: 500px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+        }
+
+        .data-quality-notice-content.collapsed {
+            max-height: 0;
+            padding: 0 15px;
+        }
+
+        .data-quality-notice ul {
+            margin: 0;
+            padding-left: 18px;
+        }
+
+        .data-quality-notice li {
+            margin-bottom: 4px;
+            color: #37474f;
+        }
+
+        .leaflet-popup-content {
+            margin: 15px;
+            min-width: 200px;
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        .popup-title {
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .popup-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .popup-row:last-child {
+            border-bottom: none;
+        }
+
+        .popup-label {
+            font-weight: 500;
+            color: #666;
+        }
+
+        .popup-value {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .stats-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin: 2px;
+        }
+
+        .stats-fatal {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .stats-injury {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+
+        .stats-property {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        /* Custom scrollbar */
+        #sidebar::-webkit-scrollbar,
+        .filter-options::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #sidebar::-webkit-scrollbar-track,
+        .filter-options::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        #sidebar::-webkit-scrollbar-thumb,
+        .filter-options::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+
+        #sidebar::-webkit-scrollbar-thumb:hover,
+        .filter-options::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Geographic filter tabs */
+        .geo-tabs {
+            display: flex;
+            border-bottom: 2px solid #dee2e6;
+            margin: 0 20px;
+            gap: 0;
+        }
+
+        .geo-tab {
+            flex: 1;
+            padding: 12px 10px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #6c757d;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .geo-tab:hover {
+            background: #f8f9fa;
+            color: #495057;
+        }
+
+        .geo-tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            background: #f8f9fa;
+        }
+
+        .geo-content {
+            display: none;
+            padding: 15px 20px;
+        }
+
+        .geo-content.active {
+            display: block;
+        }
+
+        .geo-dropdown {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 13px;
+            background: white;
+            cursor: pointer;
+            color: #495057;
+        }
+
+        .geo-dropdown:hover {
+            border-color: #adb5bd;
+        }
+
+        .geo-dropdown:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .geo-dropdown option {
+            padding: 8px;
+        }
+
+        .geo-section {
+            background: white;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .geo-section-header {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #495057;
+        }
+
+        /* Mobile toggle button */
+        #sidebar-toggle {
+            display: none;  /* Hidden on desktop */
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 10001;
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transition: transform 0.2s;
+        }
+
+        #sidebar-toggle:hover {
+            transform: scale(1.05);
+        }
+
+        #sidebar-toggle:active {
+            transform: scale(0.95);
+        }
+
+        /* ========================================
+           RESPONSIVE DESIGN - MOBILE FIRST
+           ======================================== */
+
+        /* Mobile devices (< 768px) */
+        @media (max-width: 767px) {
+            #sidebar {
+                width: 100%;
+                left: 0;
+                bottom: auto;
+                max-height: 70vh;
+                transform: translateY(-100%);
+                transition: transform 0.3s ease;
+                border-bottom: 2px solid #667eea;
+            }
+
+            #sidebar.open {
+                transform: translateY(0);
+            }
+
+            #map {
+                left: 0;
+                top: 0;
+            }
+
+            #sidebar-toggle {
+                display: block;
+            }
+
+            /* Make filters more touch-friendly on mobile */
+            .filter-section input[type="checkbox"] {
+                width: 20px;
+                height: 20px;
+            }
+
+            .filter-option label {
+                padding: 12px 15px;
+                font-size: 14px;
+            }
+
+            /* Adjust year slider for mobile */
+            .year-control {
+                padding: 15px;
+            }
+
+            #yearSlider {
+                margin: 15px 0;
+            }
+        }
+
+        /* Tablet devices (768px - 1023px) */
+        @media (min-width: 768px) and (max-width: 1023px) {
+            #sidebar {
+                width: 300px;
+            }
+
+            #map {
+                left: 300px;
+            }
+
+            /* Slightly smaller fonts for tablets */
+            .filter-section-title {
+                font-size: 12px;
+            }
+
+            .filter-option label {
+                font-size: 12px;
+            }
+        }
+
+        /* Desktop devices (>= 1024px) */
+        @media (min-width: 1024px) {
+            #sidebar {
+                width: 320px;
+            }
+
+            #map {
+                left: 320px;
+            }
+        }
+
+        /* Large desktop (>= 1440px) */
+        @media (min-width: 1440px) {
+            #sidebar {
+                width: 400px;
+            }
+
+            #map {
+                left: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Skip link for keyboard accessibility -->
+    <a href="#map" class="skip-link">Skip to map</a>
+
+    <!-- Tooltip popup overlay -->
+    <div class="tooltip-popup-overlay" id="tooltipOverlay" onclick="closeTooltip()"></div>
+
+    <!-- Tooltip popup -->
+    <div class="tooltip-popup" id="tooltipPopup">
+        <div class="tooltip-popup-header">
+            <div class="tooltip-popup-title" id="tooltipTitle"></div>
+            <button class="tooltip-popup-close" onclick="closeTooltip()">&times;</button>
+        </div>
+        <div class="tooltip-popup-content" id="tooltipContent"></div>
+    </div>
+
+    <div id="loading">Loading collision data...</div>
+
+    <!-- Mobile toggle button -->
+    <button id="sidebar-toggle" onclick="toggleSidebar()">
+        <span id="toggle-icon">☰</span> Filters
+    </button>
+
+    <div id="sidebar" role="navigation" aria-label="Collision data filters">
+        <div class="sidebar-header">
+            <h1>Toronto KSI Collisions</h1>
+            <p>Interactive Map</p>
+            <a href="/analysis" target="_blank">View Statistical Analysis</a>
+            <button class="share-btn" onclick="shareCurrentView()" aria-label="Share current map view">
+                Share This View
+            </button>
+        </div>
+
+        <!-- Share notification -->
+        <div id="share-notification" class="share-notification"></div>
+
+        <!-- Dynamic collision count -->
+        <div class="collision-count-display">
+            <span class="collision-count-label">Showing:</span>
+            <span id="collisionCount" class="collision-count-value">{{ "{:,}".format(total_collisions) }} collisions</span>
+        </div>
+
+        <div class="year-control">
+            <div class="year-control-title">YEAR RANGE</div>
+            <div id="yearSlider"></div>
+            <div id="yearDisplay">All Years (2006-2023)</div>
+        </div>
+
+        <div class="clear-filters-btn" onclick="clearAllFilters()">
+            Clear All Filters
+        </div>
+
+        <!-- Data Quality Notice -->
+        <div class="data-quality-notice">
+            <div class="data-quality-notice-header" onclick="toggleDataNotice()">
+                <strong>About This Data</strong>
+                <span class="data-quality-notice-toggle collapsed">▼</span>
+            </div>
+            <div class="data-quality-notice-content collapsed">
+                <ul>
+                    <li><strong>Dataset:</strong> {{ "{:,}".format(total_collisions) }} collision events (2006-2023)</li>
+                    <li><strong>Parties Involved:</strong> {{ "{:,}".format(total_parties) }} records (avg {{ avg_parties }} per collision)</li>
+                    <li><strong>Each marker</strong> represents one collision (may have multiple parties)</li>
+                    <li><strong>Source:</strong> Toronto Open Data KSI Dataset</li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="filters-container">
+            <!-- Filters will be dynamically populated here -->
+        </div>
+    </div>
+
+    <div id="map" role="application" aria-label="Toronto collision map - navigate collisions by location and filters"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- noUiSlider JS -->
+    <script src="https://unpkg.com/nouislider@15.7.1/dist/nouislider.min.js"></script>
+
+    <script>
+        console.log('[INIT] Starting Vision Zero map with server-side clustering...');
+
+        // Initialize map
+        const map = L.map('map').setView([43.7, -79.42], 11);
+
+        // Add tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 18
+        }).addTo(map);
+
+        // Store current markers
+        let currentMarkers = [];
+        let currentClusters = [];
+
+        // Store current boundary layer
+        let currentBoundaryLayer = null;
+
+        // Track if popup autopan is in progress to prevent marker reload
+        let isAutopanning = false;
+
+        // Debounce timer for map events to prevent excessive API calls
+        let debounceTimer = null;
+
+        // Mobile sidebar toggle function
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const toggleIcon = document.getElementById('toggle-icon');
+            sidebar.classList.toggle('open');
+
+            // Update icon
+            if (sidebar.classList.contains('open')) {
+                toggleIcon.textContent = '✕';  // Close icon
+            } else {
+                toggleIcon.textContent = '☰';  // Menu icon
+            }
+
+            // Invalidate map size after sidebar animation completes
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 300);
+        }
+
+        // Toggle data quality notice
+        function toggleDataNotice() {
+            const content = document.querySelector('.data-quality-notice-content');
+            const toggle = document.querySelector('.data-quality-notice-toggle');
+
+            content.classList.toggle('collapsed');
+            toggle.classList.toggle('collapsed');
+        }
+
+        // Show tooltip popup
+        function showTooltip(event, title, content) {
+            event.stopPropagation(); // Prevent event bubbling
+
+            const popup = document.getElementById('tooltipPopup');
+            const overlay = document.getElementById('tooltipOverlay');
+            const titleEl = document.getElementById('tooltipTitle');
+            const contentEl = document.getElementById('tooltipContent');
+
+            titleEl.textContent = title;
+            contentEl.textContent = content;
+
+            overlay.classList.add('active');
+            popup.classList.add('active');
+        }
+
+        // Close tooltip popup
+        function closeTooltip() {
+            const popup = document.getElementById('tooltipPopup');
+            const overlay = document.getElementById('tooltipOverlay');
+
+            overlay.classList.remove('active');
+            popup.classList.remove('active');
+        }
+
+        // Close popup when pressing Escape key
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeTooltip();
+            }
+        });
+
+        // Filter state
+        let activeFilters = {
+            years: null,
+            acclass: [],
+            road_user_category: [],
+            time_range: [],
+            impactype: [],
+            road_class: [],
+            traffctl: [],
+            light: [],
+            rdsfcond: [],
+            age_category: [],
+            vulnerable: []
+        };
+
+        // Geographic filter state (only one can be active at a time)
+        let activeGeoFilter = {
+            type: null,  // 'ward', 'division', or 'neighbourhood'
+            value: null  // selected value
+        };
+
+        // Filter metadata (counts, etc.)
+        let filterMetadata = {};
+
+        // Filters metadata (dropdowns - ward, neighbourhood, etc.)
+        let filtersMetadata = {};
+
+        // Track if UI has been built
+        let filterUIBuilt = false;
+
+        // URL State Manager for permalink support
+        const URLStateManager = {
+            updateURL: function() {
+                const params = new URLSearchParams();
+
+                // Map state
+                const center = map.getCenter();
+                params.set('lat', center.lat.toFixed(4));
+                params.set('lng', center.lng.toFixed(4));
+                params.set('z', map.getZoom());
+
+                // Year range
+                if (activeFilters.years && activeFilters.years.length > 0) {
+                    const sortedYears = activeFilters.years.sort((a, b) => a - b);
+                    if (sortedYears.length === 1) {
+                        params.set('y', sortedYears[0]);
+                    } else {
+                        const isConsecutive = sortedYears.every((year, idx) =>
+                            idx === 0 || year === sortedYears[idx - 1] + 1
+                        );
+                        if (isConsecutive && sortedYears.length > 2) {
+                            params.set('y', `${sortedYears[0]}-${sortedYears[sortedYears.length - 1]}`);
+                        } else {
+                            params.set('y', sortedYears.join(','));
+                        }
+                    }
+                }
+
+                // Other filters
+                const filterMap = {
+                    'acclass': 'sev',
+                    'road_user_category': 'ru',
+                    'time_range': 'time',
+                    'impactype': 'imp',
+                    'road_class': 'rc',
+                    'traffctl': 'tc',
+                    'light': 'lt',
+                    'rdsfcond': 'surf',
+                    'age_category': 'age',
+                    'vulnerable': 'vuln'
+                };
+
+                Object.entries(activeFilters).forEach(([key, values]) => {
+                    if (key !== 'years' && values.length > 0) {
+                        params.set(filterMap[key] || key, values.join(','));
+                    }
+                });
+
+                // Geographic filter
+                if (activeGeoFilter.type && activeGeoFilter.value) {
+                    params.set('gt', activeGeoFilter.type);
+                    params.set('gv', activeGeoFilter.value);
+                }
+
+                // Update URL without reloading page
+                const newURL = `${window.location.pathname}?${params.toString()}`;
+                window.history.replaceState({ path: newURL }, '', newURL);
+            },
+
+            restoreFromURL: function() {
+                const params = new URLSearchParams(window.location.search);
+
+                // Restore map position
+                const lat = parseFloat(params.get('lat'));
+                const lng = parseFloat(params.get('lng'));
+                const zoom = parseInt(params.get('z'));
+
+                if (!isNaN(lat) && !isNaN(lng) && !isNaN(zoom)) {
+                    map.setView([lat, lng], zoom);
+                }
+
+                // Restore years
+                const yearsParam = params.get('y');
+                if (yearsParam) {
+                    if (yearsParam.includes('-')) {
+                        const [start, end] = yearsParam.split('-').map(Number);
+                        activeFilters.years = [];
+                        for (let y = start; y <= end; y++) {
+                            activeFilters.years.push(y);
+                        }
+                    } else if (yearsParam.includes(',')) {
+                        activeFilters.years = yearsParam.split(',').map(Number);
+                    } else {
+                        activeFilters.years = [Number(yearsParam)];
+                    }
+
+                    // Update year slider UI
+                    if (activeFilters.years.length > 0) {
+                        const minYear = Math.min(...activeFilters.years);
+                        const maxYear = Math.max(...activeFilters.years);
+                        const yearSlider = document.getElementById('yearSlider');
+                        if (yearSlider && yearSlider.noUiSlider) {
+                            yearSlider.noUiSlider.set([minYear, maxYear]);
+                        }
+                    }
+                }
+
+                // Restore other filters
+                const filterKeys = {
+                    'sev': 'acclass',
+                    'ru': 'road_user_category',
+                    'time': 'time_range',
+                    'imp': 'impactype',
+                    'rc': 'road_class',
+                    'tc': 'traffctl',
+                    'lt': 'light',
+                    'surf': 'rdsfcond',
+                    'age': 'age_category',
+                    'vuln': 'vulnerable'
+                };
+
+                Object.entries(filterKeys).forEach(([shortKey, longKey]) => {
+                    const value = params.get(shortKey);
+                    if (value) {
+                        activeFilters[longKey] = value.split(',');
+                    }
+                });
+
+                // Restore geographic filter
+                const geoType = params.get('gt');
+                const geoValue = params.get('gv');
+                if (geoType && geoValue) {
+                    activeGeoFilter.type = geoType;
+                    activeGeoFilter.value = geoValue;
+
+                    // Load boundary will happen after metadata loads
+                }
+
+                return params.toString() !== '';
+            }
+        };
+
+        //  Debounced URL update
+        let urlUpdateTimer = null;
+        function scheduleURLUpdate() {
+            clearTimeout(urlUpdateTimer);
+            urlUpdateTimer = setTimeout(() => {
+                URLStateManager.updateURL();
+            }, 500);
+        }
+
+        // Share current view
+        async function shareCurrentView() {
+            // First, update URL to ensure it's current
+            URLStateManager.updateURL();
+
+            // Get the full URL
+            const shareURL = window.location.href;
+
+            try {
+                // Try to copy to clipboard
+                await navigator.clipboard.writeText(shareURL);
+
+                // Show success notification
+                showShareNotification('Link copied to clipboard!');
+
+                console.log('[SHARE] URL copied:', shareURL);
+            } catch (err) {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = shareURL;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.select();
+
+                try {
+                    document.execCommand('copy');
+                    showShareNotification('Link copied to clipboard!');
+                } catch (err) {
+                    showShareNotification('Failed to copy link', 'error');
+                    console.error('[SHARE] Failed to copy:', err);
+                }
+
+                document.body.removeChild(textArea);
+            }
+        }
+
+        function showShareNotification(message, type = 'success') {
+            const notification = document.getElementById('share-notification');
+            notification.textContent = message;
+            notification.style.background = type === 'success' ? '#28a745' : '#dc3545';
+            notification.classList.add('show');
+
+            // Hide after 3 seconds
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Custom cluster icon
+        function createClusterIcon(cluster) {
+            const count = cluster.properties.point_count;
+            let size, className;
+
+            if (count < 10) {
+                size = 40;
+                className = 'cluster-marker cluster-marker-small';
+            } else if (count < 100) {
+                size = 50;
+                className = 'cluster-marker cluster-marker-medium';
+            } else {
+                size = 60;
+                className = 'cluster-marker cluster-marker-large';
+            }
+
+            return L.divIcon({
+                html: `<div class="${className}">${count}</div>`,
+                className: '',
+                iconSize: [size, size]
+            });
+        }
+
+        // Create individual marker icon based on accident class
+        function createMarkerIcon(acclass) {
+            let color;
+            switch(acclass) {
+                case 'Fatal':
+                    color = '#d32f2f';
+                    break;
+                case 'Non-Fatal Injury':
+                    color = '#f57c00';
+                    break;
+                default:
+                    color = '#388e3c';
+            }
+
+            return L.circleMarker([0, 0], {
+                radius: 6,
+                fillColor: color,
+                color: 'white',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.8
+            });
+        }
+
+        // Create popup content for cluster
+        function createClusterPopup(cluster) {
+            const props = cluster.properties;
+            return `
+                <div class="popup-title">Collision Cluster</div>
+                <div class="popup-row">
+                    <span class="popup-label">Total Collisions:</span>
+                    <span class="popup-value">${props.point_count}</span>
+                </div>
+                <div style="margin-top: 10px;">
+                    ${props.fatal > 0 ? `<span class="stats-badge stats-fatal">Fatal: ${props.fatal}</span>` : ''}
+                    ${props.injury > 0 ? `<span class="stats-badge stats-injury">Injury: ${props.injury}</span>` : ''}
+                    ${props.property > 0 ? `<span class="stats-badge stats-property">Property: ${props.property}</span>` : ''}
+                </div>
+                <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                    Zoom in to see individual collisions
+                </div>
+            `;
+        }
+
+        // Format time from HHMM format (e.g., "316" -> "03:16")
+        function formatTime(timeStr) {
+            if (!timeStr || timeStr === 'N/A') return 'N/A';
+
+            // Pad with zeros if needed (e.g., "316" -> "0316")
+            const padded = timeStr.toString().padStart(4, '0');
+            const hours = padded.substring(0, 2);
+            const minutes = padded.substring(2, 4);
+
+            return `${hours}:${minutes}`;
+        }
+
+        // Extract just the date portion (remove timestamp if present)
+        function formatDate(dateStr) {
+            if (!dateStr || dateStr === 'N/A') return 'N/A';
+
+            // If the date contains a time portion (space followed by time), remove it
+            const parts = dateStr.split(' ');
+            return parts[0];  // Return just the date part
+        }
+
+        // Create popup content for individual marker
+        function createMarkerPopup(props) {
+            // Format date and time properly
+            const formattedDate = formatDate(props.date);
+            const formattedTime = formatTime(props.time);
+
+            // Header with collision severity and date/time
+            let html = `
+                <div style="max-width: 350px; max-height: 60vh; overflow-y: auto;">
+                    <div class="popup-title" style="font-size: 16px; font-weight: bold; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #dee2e6;">
+                        ${props.acclass || 'Collision'}
+                    </div>
+                    <div style="margin-bottom: 12px; font-size: 13px; color: #6c757d;">
+                        <div><strong>Date:</strong> ${formattedDate}</div>
+                        <div><strong>Time:</strong> ${formattedTime} (${props.time_range || 'N/A'})</div>
+                    </div>
+            `;
+
+            // Parties Involved Section
+            if (props.parties && props.parties.length > 0) {
+                html += `
+                    <div style="margin-bottom: 12px;">
+                        <div style="font-weight: bold; font-size: 14px; margin-bottom: 6px; color: #495057;">
+                            Parties Involved (${props.num_parties || props.parties.length})
+                        </div>
+                `;
+
+                props.parties.forEach((party, index) => {
+                    // Determine party label - prioritize specific type (Driver/Passenger) over generic role (Motorist)
+                    let partyLabel = party.type || party.role || 'Unknown';
+
+                    // If role is different from type and meaningful, add it in parentheses
+                    // But skip if role is just "Motorist" and type is Driver/Passenger (redundant)
+                    if (party.role && party.type && party.role !== party.type) {
+                        if (!(party.role === 'Motorist' && (party.type === 'Driver' || party.type === 'Passenger'))) {
+                            partyLabel = `${party.type} (${party.role})`;
+                        }
+                    }
+
+                    html += `
+                        <div style="background: #f8f9fa; padding: 8px; margin-bottom: 6px; border-radius: 4px; border-left: 3px solid #667eea;">
+                            <div style="font-weight: 600; color: #495057; margin-bottom: 4px;">
+                                Party ${index + 1}: ${partyLabel}
+                            </div>
+                            <div style="font-size: 12px; color: #6c757d;">
+                                ${party.injury ? `<div><strong>Injury:</strong> ${party.injury}</div>` : ''}
+                                ${party.age ? `<div><strong>Age:</strong> ${party.age} ${party.age_category ? `(${party.age_category})` : ''}</div>` : ''}
+                                ${party.vehtype && party.vehtype !== '' ? `<div><strong>Vehicle:</strong> ${party.vehtype}</div>` : ''}
+                                ${party.drivcond && party.drivcond !== '' ? `<div><strong>Driver Condition:</strong> ${party.drivcond}</div>` : ''}
+                                ${party.manoeuver && party.manoeuver !== '' ? `<div><strong>Manoeuvre:</strong> ${party.manoeuver}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `</div>`;
+            }
+
+            // Environmental Conditions Section
+            html += `
+                <div style="margin-bottom: 12px;">
+                    <div style="font-weight: bold; font-size: 14px; margin-bottom: 6px; color: #495057;">
+                        Conditions
+                    </div>
+                    <div style="font-size: 12px; color: #6c757d;">
+                        ${props.light ? `<div><strong>Light:</strong> ${props.light}</div>` : ''}
+                        ${props.rdsfcond ? `<div><strong>Road Surface:</strong> ${props.rdsfcond}</div>` : ''}
+                        ${props.visibility ? `<div><strong>Visibility:</strong> ${props.visibility}</div>` : ''}
+                    </div>
+                </div>
+            `;
+
+            // Traffic & Road Information Section
+            html += `
+                <div style="margin-bottom: 12px;">
+                    <div style="font-weight: bold; font-size: 14px; margin-bottom: 6px; color: #495057;">
+                        Traffic & Road
+                    </div>
+                    <div style="font-size: 12px; color: #6c757d;">
+                        ${props.road_class ? `<div><strong>Road Class:</strong> ${props.road_class}</div>` : ''}
+                        ${props.traffctl ? `<div><strong>Traffic Control:</strong> ${props.traffctl}</div>` : ''}
+                        ${props.impactype ? `<div><strong>Impact Type:</strong> ${props.impactype}</div>` : ''}
+                    </div>
+                </div>
+            `;
+
+            // Location Section
+            html += `
+                <div style="margin-bottom: 12px;">
+                    <div style="font-weight: bold; font-size: 14px; margin-bottom: 6px; color: #495057;">
+                        Location
+                    </div>
+                    <div style="font-size: 12px; color: #6c757d;">
+                        ${props.street ? `<div><strong>Street:</strong> ${props.street}</div>` : ''}
+                        ${props.ward ? `<div><strong>Ward:</strong> ${props.ward}</div>` : ''}
+                        ${props.division ? `<div><strong>Division:</strong> ${props.division}</div>` : ''}
+                        ${props.neighbourhood ? `<div><strong>Neighbourhood:</strong> ${props.neighbourhood}</div>` : ''}
+                    </div>
+                </div>
+            `;
+
+            // Contributing Factors Section (only if any are present)
+            const hasFactors = props.speeding === 'Yes' || props.redlight === 'Yes';
+            if (hasFactors) {
+                html += `
+                    <div style="margin-bottom: 8px;">
+                        <div style="font-weight: bold; font-size: 14px; margin-bottom: 6px; color: #dc3545;">
+                            Contributing Factors
+                        </div>
+                        <div style="font-size: 12px; color: #6c757d;">
+                            ${props.speeding === 'Yes' ? '<div>Speeding</div>' : ''}
+                            ${props.redlight === 'Yes' ? '<div>Red Light</div>' : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+            return html;
+        }
+
+        // Build filter query string
+        function buildFilterQuery() {
+            const params = new URLSearchParams();
+
+            // Add year range
+            if (activeFilters.years && activeFilters.years.length > 0) {
+                params.append('years', activeFilters.years.join(','));
+            }
+
+            // Add other filters
+            for (const [key, values] of Object.entries(activeFilters)) {
+                if (key !== 'years' && values.length > 0) {
+                    params.append(key, values.join(','));
+                }
+            }
+
+            // Add geographic filter (only one active at a time)
+            if (activeGeoFilter.type && activeGeoFilter.value) {
+                params.append(activeGeoFilter.type, activeGeoFilter.value);
+            }
+
+            return params.toString();
+        }
+
+        // Load clusters from server
+        async function loadClusters() {
+            const zoom = map.getZoom();
+            const bounds = map.getBounds();
+
+            // Format bounds as south,west,north,east
+            const boundsStr = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
+
+            console.log(`[LOAD] Fetching clusters for zoom ${zoom}...`);
+
+            try {
+                let url = `/api/clusters?zoom=${zoom}&bounds=${boundsStr}`;
+                const filterQuery = buildFilterQuery();
+                if (filterQuery) {
+                    url += `&${filterQuery}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                console.log(`[LOAD] Received ${data.clusters.length} clusters/markers (${data.total_in_view} total in view)`);
+
+                // Update collision count display
+                const countElement = document.getElementById('collisionCount');
+                if (countElement && data.total_in_view !== undefined) {
+                    countElement.textContent = `${data.total_in_view.toLocaleString()} collision${data.total_in_view !== 1 ? 's' : ''}`;
+                }
+
+                // Clear existing markers
+                currentMarkers.forEach(m => map.removeLayer(m));
+                currentClusters.forEach(c => map.removeLayer(c));
+                currentMarkers = [];
+                currentClusters = [];
+
+                // Add new markers/clusters
+                data.clusters.forEach(item => {
+                    if (item.type === 'cluster') {
+                        // Create cluster marker
+                        const marker = L.marker([item.lat, item.lon], {
+                            icon: createClusterIcon(item)
+                        });
+
+                        marker.bindPopup(createClusterPopup(item), {
+                            keepInView: true,
+                            autoPan: true,
+                            autoPanPadding: [50, 50],
+                            maxWidth: 400
+                        });
+                        marker.on('popupopen', () => {
+                            isAutopanning = true;
+                            console.log('[POPUP] Popup opened, autopan flag set');
+                        });
+                        marker.addTo(map);
+                        currentClusters.push(marker);
+
+                    } else {
+                        // Create individual marker
+                        const props = item.properties;
+                        const marker = createMarkerIcon(props.acclass);
+                        marker.setLatLng([item.lat, item.lon]);
+
+                        marker.bindPopup(createMarkerPopup(props), {
+                            keepInView: true,
+                            autoPan: true,
+                            autoPanPadding: [50, 50],
+                            maxWidth: 400
+                        });
+                        marker.on('popupopen', () => {
+                            isAutopanning = true;
+                            console.log('[POPUP] Popup opened, autopan flag set');
+                        });
+                        marker.addTo(map);
+                        currentMarkers.push(marker);
+                    }
+                });
+
+                console.log(`[LOAD] Added ${currentClusters.length} clusters and ${currentMarkers.length} individual markers`);
+
+            } catch (error) {
+                console.error('[ERROR] Failed to load clusters:', error);
+            }
+        }
+
+        // Load filter metadata (counts)
+        // Load filters metadata (ward, neighbourhood, etc. dropdowns)
+        async function loadFiltersMetadata() {
+            try {
+                const response = await fetch('/api/filters');
+                filtersMetadata = await response.json();
+                console.log('[FILTERS] Loaded filter metadata:', filtersMetadata);
+            } catch (error) {
+                console.error('[ERROR] Failed to load filters metadata:', error);
+            }
+        }
+
+        async function loadFilterMetadata() {
+            try {
+                // Build filter query parameters
+                const filterQuery = buildFilterQuery();
+
+                // Use filtered stats endpoint if filters are active, otherwise use summary
+                let url = '/api/stats/summary';
+                if (filterQuery) {
+                    url = `/api/stats/filtered?${filterQuery}`;
+                    console.log('[FILTERS] Loading filtered stats with query:', filterQuery);
+                } else {
+                    console.log('[FILTERS] Loading summary stats (no filters active)');
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                filterMetadata = {
+                    acclass: data.by_class || {},
+                    road_user_category: data.by_roaduser || {},
+                    time_range: data.by_timerange || {},
+                    year: data.by_year || {},
+                    impactype: data.by_impactype || {},
+                    road_class: data.by_road_class || {},
+                    traffctl: data.by_traffctl || {},
+                    light: data.by_light || {},
+                    rdsfcond: data.by_rdsfcond || {},
+                    age_category: data.by_age_category || {},
+                    vulnerable: data.by_vulnerable || {}
+                };
+
+                console.log('[FILTERS] Loaded filter metadata:', filterMetadata);
+
+                // Build filter UI only on first load, update counts on subsequent loads
+                if (!filterUIBuilt) {
+                    console.log('[FILTERS] Building filter UI for the first time...');
+                    buildFilterUI();
+                    filterUIBuilt = true;
+                } else {
+                    console.log('[FILTERS] Updating filter counts...');
+                    updateFilterCounts();
+                }
+
+            } catch (error) {
+                console.error('[ERROR] Failed to load filter metadata:', error);
+            }
+        }
+
+        // Tooltip descriptions for filter categories
+        const tooltipDescriptions = {
+            acclass: "Severity classification - Fatal (deaths), Non-Fatal Injury, or Property Damage Only. Shows highest severity when multiple parties involved.",
+            road_user_category: "Type of person involved - One collision may have multiple parties (e.g., driver + pedestrian). Each collision appears in ALL applicable categories based on involved parties.",
+            time_range: "Time grouped into periods - Night (12am-5:59am), Morning (6am-11:59am), Afternoon (12pm-5:59pm), Evening (6pm-11:59pm)",
+            vulnerable: "Collisions involving vulnerable road users (pedestrians, cyclists, micromobility users) who lack vehicle protection",
+            age_category: "Age group of involved parties - Children (0-14), Youth (15-24), Adults (25-64), Seniors (65+). Uses midpoint of age ranges when exact age unavailable.",
+            impactype: "How vehicles/users collided - Turning movement, rear end, angle, sideswipe, pedestrian strike, etc.",
+            road_class: "Street type by function - Major/Minor Arterial, Collector, Local, Expressway",
+            traffctl: "Traffic control device at location - No control, traffic signal, stop sign, pedestrian crossover, etc.",
+            light: "Visibility during collision - Daylight, dark, dusk/dawn (with or without artificial lighting)",
+            rdsfcond: "Road surface condition affecting traction - Dry, wet, snow, ice, slush, loose gravel"
+        };
+
+        // Build filter UI
+        function buildFilterUI() {
+            const container = document.getElementById('filters-container');
+
+            const filterSections = [
+                {
+                    key: 'acclass',
+                    title: 'Accident Class',
+                    options: ['Fatal', 'Non-Fatal Injury', 'Property Damage Only']
+                },
+                {
+                    key: 'road_user_category',
+                    title: 'Road User Category',
+                    options: ['Pedestrian', 'Cyclist', 'Motorist', 'Motorcyclist', 'Micromobility', 'Property Owner']
+                },
+                {
+                    key: 'time_range',
+                    title: 'Time of Day',
+                    options: ['Morning', 'Afternoon', 'Evening', 'Night']
+                },
+                {
+                    key: 'vulnerable',
+                    title: 'Vulnerable Road Users',
+                    options: ['Yes', 'No']
+                },
+                {
+                    key: 'age_category',
+                    title: 'Age Category',
+                    options: ['Children (0-14)', 'Youth (15-24)', 'Adults (25-64)', 'Seniors (65+)']
+                },
+                {
+                    key: 'impactype',
+                    title: 'Impact Type',
+                    options: ['Pedestrian Collisions', 'Cyclist Collisions', 'Turning Movement', 'Rear End', 'Angle', 'Approaching', 'Sideswipe', 'SMV Other', 'SMV Unattended Vehicle', 'Other']
+                },
+                {
+                    key: 'road_class',
+                    title: 'Road Class',
+                    options: ['Major Arterial', 'Minor Arterial', 'Collector', 'Local', 'Expressway', 'Expressway Ramp']
+                },
+                {
+                    key: 'traffctl',
+                    title: 'Traffic Control',
+                    options: ['No Control', 'Traffic Signal', 'Stop Sign', 'Pedestrian Crossover', 'Traffic Controller', 'Yield Sign']
+                },
+                {
+                    key: 'light',
+                    title: 'Light Conditions',
+                    options: ['Daylight', 'Dark', 'Dark, artificial', 'Dusk', 'Dusk, artificial', 'Dawn', 'Dawn, artificial', 'Daylight, artificial']
+                },
+                {
+                    key: 'rdsfcond',
+                    title: 'Road Surface',
+                    options: ['Dry', 'Wet', 'Loose Snow', 'Slush', 'Ice', 'Packed Snow', 'Loose Sand or Gravel']
+                },
+            ];
+
+            filterSections.forEach(section => {
+                const sectionDiv = document.createElement('div');
+                sectionDiv.className = 'filter-section';
+
+                const header = document.createElement('div');
+                header.className = 'filter-header';
+                header.setAttribute('role', 'button');
+                header.setAttribute('tabindex', '0');
+                header.setAttribute('aria-expanded', 'true');
+                header.innerHTML = `
+                    <span class="filter-title-wrapper">
+                        ${section.title}
+                        <span class="tooltip-icon" tabindex="0" role="button" aria-label="Show information about ${section.title}" onclick="showTooltip(event, '${section.title}', \`${tooltipDescriptions[section.key]}\`)" onkeypress="if(event.key==='Enter'||event.key===' ')showTooltip(event, '${section.title}', \`${tooltipDescriptions[section.key]}\`)">
+                            <svg viewBox="0 0 416.979 416.979" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M356.004,61.156c-81.37-81.47-213.377-81.551-294.848-0.182c-81.47,81.371-81.552,213.379-0.181,294.85 c81.369,81.47,213.378,81.551,294.849,0.181C437.293,274.636,437.375,142.626,356.004,61.156z M237.6,340.786 c0,3.217-2.607,5.822-5.822,5.822h-46.576c-3.215,0-5.822-2.605-5.822-5.822V167.885c0-3.217,2.607-5.822,5.822-5.822h46.576 c3.215,0,5.822,2.604,5.822,5.822V340.786z M208.49,137.901c-18.618,0-33.766-15.146-33.766-33.765 c0-18.617,15.147-33.766,33.766-33.766c18.619,0,33.766,15.148,33.766,33.766C242.256,122.755,227.107,137.901,208.49,137.901z"/>
+                            </svg>
+                        </span>
+                    </span>
+                    <span class="toggle-icon">▼</span>
+                `;
+
+                const optionsDiv = document.createElement('div');
+                optionsDiv.className = 'filter-options';
+                optionsDiv.setAttribute('role', 'group');
+                optionsDiv.setAttribute('aria-label', `${section.title} options`);
+
+                section.options.forEach(option => {
+                    const checkboxDiv = document.createElement('div');
+                    checkboxDiv.className = 'filter-checkbox';
+
+                    const count = filterMetadata[section.key]?.[option] || 0;
+                    const checkboxId = `filter-${section.key}-${option.replace(/[^a-zA-Z0-9]/g, '')}`;
+
+                    checkboxDiv.innerHTML = `
+                        <input type="checkbox" id="${checkboxId}" data-filter="${section.key}" data-value="${option}">
+                        <label for="${checkboxId}">
+                            <span class="filter-label-text">${option}</span>
+                            <span class="filter-count">${count.toLocaleString()}</span>
+                        </label>
+                    `;
+
+                    checkboxDiv.querySelector('input').addEventListener('change', handleFilterChange);
+                    optionsDiv.appendChild(checkboxDiv);
+                });
+
+                // Toggle function for both click and keyboard
+                const toggleSection = () => {
+                    const isCollapsed = header.classList.toggle('collapsed');
+                    optionsDiv.classList.toggle('collapsed');
+                    header.setAttribute('aria-expanded', !isCollapsed);
+                };
+
+                header.addEventListener('click', toggleSection);
+                header.addEventListener('keypress', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        toggleSection();
+                    }
+                });
+
+                sectionDiv.appendChild(header);
+                sectionDiv.appendChild(optionsDiv);
+                container.appendChild(sectionDiv);
+            });
+
+            // Build geographic filter section (tabs + dropdowns)
+            buildGeographicFilter();
+        }
+
+        // Update filter counts without rebuilding the UI
+        function updateFilterCounts() {
+            const filterSections = [
+                { key: 'acclass', options: ['Fatal', 'Non-Fatal Injury', 'Property Damage Only'] },
+                { key: 'road_user_category', options: ['Pedestrian', 'Cyclist', 'Motorist', 'Motorcyclist', 'Micromobility', 'Property Owner'] },
+                { key: 'time_range', options: ['Morning', 'Afternoon', 'Evening', 'Night'] },
+                { key: 'vulnerable', options: ['Yes', 'No'] },
+                { key: 'age_category', options: ['Children (0-14)', 'Youth (15-24)', 'Adults (25-64)', 'Seniors (65+)'] },
+                { key: 'impactype', options: ['Pedestrian Collisions', 'Cyclist Collisions', 'Turning Movement', 'Rear End', 'Angle', 'Approaching', 'Sideswipe', 'SMV Other', 'SMV Unattended Vehicle', 'Other'] },
+                { key: 'road_class', options: ['Major Arterial', 'Minor Arterial', 'Collector', 'Local', 'Expressway', 'Expressway Ramp'] },
+                { key: 'traffctl', options: ['No Control', 'Traffic Signal', 'Stop Sign', 'Pedestrian Crossover', 'Traffic Controller', 'Yield Sign'] },
+                { key: 'light', options: ['Daylight', 'Dark', 'Dark, artificial', 'Dusk', 'Dusk, artificial', 'Dawn', 'Dawn, artificial', 'Daylight, artificial'] },
+                { key: 'rdsfcond', options: ['Dry', 'Wet', 'Loose Snow', 'Slush', 'Ice', 'Packed Snow', 'Loose Sand or Gravel'] }
+            ];
+
+            filterSections.forEach(section => {
+                section.options.forEach(option => {
+                    const checkboxId = `filter-${section.key}-${option.replace(/[^a-zA-Z0-9]/g, '')}`;
+                    const checkbox = document.getElementById(checkboxId);
+                    if (checkbox) {
+                        const label = checkbox.nextElementSibling;
+                        const countSpan = label.querySelector('.filter-count');
+                        if (countSpan) {
+                            const count = filterMetadata[section.key]?.[option] || 0;
+                            countSpan.textContent = count.toLocaleString();
+                        }
+                    }
+                });
+            });
+
+            console.log('[FILTERS] Updated filter counts');
+        }
+
+        // Build geographic filter with tabs
+        function buildGeographicFilter() {
+            const container = document.getElementById('filters-container');
+
+            const geoSection = document.createElement('div');
+            geoSection.className = 'geo-section';
+
+            // Header
+            const header = document.createElement('div');
+            header.className = 'geo-section-header';
+            header.innerHTML = `
+                <span class="filter-title-wrapper">
+                    GEOGRAPHIC AREA
+                    <span class="tooltip-icon" onclick="showTooltip(event, 'Geographic Area', 'Filter by location - Ward (political boundaries), Division (police jurisdiction), or Neighbourhood (community area)')">
+                        <svg viewBox="0 0 416.979 416.979" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M356.004,61.156c-81.37-81.47-213.377-81.551-294.848-0.182c-81.47,81.371-81.552,213.379-0.181,294.85 c81.369,81.47,213.378,81.551,294.849,0.181C437.293,274.636,437.375,142.626,356.004,61.156z M237.6,340.786 c0,3.217-2.607,5.822-5.822,5.822h-46.576c-3.215,0-5.822-2.605-5.822-5.822V167.885c0-3.217,2.607-5.822,5.822-5.822h46.576 c3.215,0,5.822,2.604,5.822,5.822V340.786z M208.49,137.901c-18.618,0-33.766-15.146-33.766-33.765 c0-18.617,15.147-33.766,33.766-33.766c18.619,0,33.766,15.148,33.766,33.766C242.256,122.755,227.107,137.901,208.49,137.901z"/>
+                        </svg>
+                    </span>
+                </span>
+            `;
+            geoSection.appendChild(header);
+
+            // Tabs
+            const tabs = document.createElement('div');
+            tabs.className = 'geo-tabs';
+            tabs.innerHTML = `
+                <div class="geo-tab active" data-geo-type="ward">Ward</div>
+                <div class="geo-tab" data-geo-type="division">Division</div>
+                <div class="geo-tab" data-geo-type="neighbourhood">Neighbourhood</div>
+            `;
+            geoSection.appendChild(tabs);
+
+            // Ward content
+            const wardContent = document.createElement('div');
+            wardContent.className = 'geo-content active';
+            wardContent.dataset.geoType = 'ward';
+            // Dynamically populate ward dropdown from sorted filtersMetadata
+            const wardSelect = document.createElement('select');
+            wardSelect.className = 'geo-dropdown';
+            wardSelect.id = 'ward-dropdown';
+
+            const wardAllOption = document.createElement('option');
+            wardAllOption.value = '';
+            wardAllOption.textContent = 'All Wards';
+            wardSelect.appendChild(wardAllOption);
+
+            filtersMetadata.WARD.forEach(ward => {
+                const option = document.createElement('option');
+                option.value = ward;
+                option.textContent = ward;
+                wardSelect.appendChild(option);
+            });
+
+            wardContent.appendChild(wardSelect);
+            geoSection.appendChild(wardContent);
+
+            // Division content
+            const divisionContent = document.createElement('div');
+            divisionContent.className = 'geo-content';
+            divisionContent.dataset.geoType = 'division';
+            divisionContent.innerHTML = `
+                <select class="geo-dropdown" id="division-dropdown">
+                    <option value="">All Divisions</option>
+                    <option value="D11">D11</option>
+                    <option value="D12">D12</option>
+                    <option value="D13">D13</option>
+                    <option value="D14">D14</option>
+                    <option value="D22">D22</option>
+                    <option value="D23">D23</option>
+                    <option value="D31">D31</option>
+                    <option value="D32">D32</option>
+                    <option value="D33">D33</option>
+                    <option value="D41">D41</option>
+                    <option value="D42">D42</option>
+                    <option value="D43">D43</option>
+                    <option value="D51">D51</option>
+                    <option value="D52">D52</option>
+                    <option value="D53">D53</option>
+                    <option value="D55">D55</option>
+                </select>
+            `;
+            geoSection.appendChild(divisionContent);
+
+            // Neighbourhood content
+            const neighbourhoodContent = document.createElement('div');
+            neighbourhoodContent.className = 'geo-content';
+            neighbourhoodContent.dataset.geoType = 'neighbourhood';
+
+            // Dynamically populate neighbourhood dropdown from sorted filtersMetadata
+            const neighbourhoodSelect = document.createElement('select');
+            neighbourhoodSelect.className = 'geo-dropdown';
+            neighbourhoodSelect.id = 'neighbourhood-dropdown';
+
+            const neighbourhoodAllOption = document.createElement('option');
+            neighbourhoodAllOption.value = '';
+            neighbourhoodAllOption.textContent = 'All Neighbourhoods';
+            neighbourhoodSelect.appendChild(neighbourhoodAllOption);
+
+            filtersMetadata.NEIGHBOURHOOD.forEach(neighbourhood => {
+                const option = document.createElement('option');
+                option.value = neighbourhood;
+                option.textContent = neighbourhood;
+                neighbourhoodSelect.appendChild(option);
+            });
+
+            neighbourhoodContent.appendChild(neighbourhoodSelect);
+            geoSection.appendChild(neighbourhoodContent);
+
+            container.insertBefore(geoSection, container.firstChild);
+
+            // Add event listeners for tabs
+            tabs.querySelectorAll('.geo-tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // Update active tab
+                    tabs.querySelectorAll('.geo-tab').forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+
+                    // Update active content
+                    const geoType = this.dataset.geoType;
+                    geoSection.querySelectorAll('.geo-content').forEach(c => c.classList.remove('active'));
+                    geoSection.querySelector(`.geo-content[data-geo-type="${geoType}"]`).classList.add('active');
+                });
+            });
+
+            // Add event listeners for dropdowns
+            document.getElementById('ward-dropdown').addEventListener('change', function(e) {
+                handleGeoFilterChange('ward', e.target.value);
+            });
+
+            document.getElementById('division-dropdown').addEventListener('change', function(e) {
+                handleGeoFilterChange('division', e.target.value);
+            });
+
+            document.getElementById('neighbourhood-dropdown').addEventListener('change', function(e) {
+                handleGeoFilterChange('neighbourhood', e.target.value);
+            });
+        }
+
+        // Handle geographic filter change
+        async function handleGeoFilterChange(type, value) {
+            console.log(`[GEO-FILTER] ${type}: ${value}`);
+
+            // Remove existing boundary layer if any
+            if (currentBoundaryLayer) {
+                map.removeLayer(currentBoundaryLayer);
+                currentBoundaryLayer = null;
+            }
+
+            if (value === '') {
+                // Clear geographic filter
+                activeGeoFilter.type = null;
+                activeGeoFilter.value = null;
+            } else {
+                activeGeoFilter.type = type;
+                activeGeoFilter.value = value;
+
+                // Load and display the boundary
+                await loadAndDisplayBoundary(type, value);
+            }
+
+            console.log('[GEO-FILTER] Active geographic filter:', activeGeoFilter);
+
+            // Reload filter metadata to update counts based on active filters
+            loadFilterMetadata();
+
+            loadClusters();
+
+            // Update URL for permalink support
+            scheduleURLUpdate();
+        }
+
+        // Load and display geographic boundary
+        async function loadAndDisplayBoundary(type, name) {
+            try {
+                console.log(`[BOUNDARY] Loading ${type}: ${name}`);
+                const response = await fetch(`/api/boundaries/${type}/${encodeURIComponent(name)}`);
+
+                if (!response.ok) {
+                    console.error('[BOUNDARY] Failed to load boundary:', response.statusText);
+                    return;
+                }
+
+                const geojson = await response.json();
+
+                // Create and add the boundary layer with highlighting
+                currentBoundaryLayer = L.geoJSON(geojson, {
+                    style: {
+                        color: '#667eea',           // Purple border
+                        weight: 3,                   // Thick border
+                        opacity: 1,
+                        fillColor: '#667eea',        // Purple fill
+                        fillOpacity: 0.15,           // Semi-transparent
+                        dashArray: '5, 5'           // Dashed line
+                    }
+                }).addTo(map);
+
+                // Zoom to fit the boundary
+                const bounds = currentBoundaryLayer.getBounds();
+                map.fitBounds(bounds, {
+                    padding: [50, 50],              // Add padding around edges
+                    maxZoom: 13                      // Don't zoom in too close
+                });
+
+                console.log('[BOUNDARY] Boundary loaded and displayed');
+
+            } catch (error) {
+                console.error('[BOUNDARY] Error loading boundary:', error);
+            }
+        }
+
+        // Handle filter change
+        function handleFilterChange(event) {
+            const checkbox = event.target;
+            const filterKey = checkbox.dataset.filter;
+            const filterValue = checkbox.dataset.value;
+
+            console.log(`[FILTER] ${filterKey} - ${filterValue}: ${checkbox.checked}`);
+
+            if (checkbox.checked) {
+                if (!activeFilters[filterKey].includes(filterValue)) {
+                    activeFilters[filterKey].push(filterValue);
+                }
+            } else {
+                activeFilters[filterKey] = activeFilters[filterKey].filter(v => v !== filterValue);
+            }
+
+            console.log('[FILTER] Active filters:', activeFilters);
+
+            // Reload filter metadata to update counts based on active filters
+            loadFilterMetadata();
+
+            loadClusters();
+
+            // Update URL for permalink support
+            scheduleURLUpdate();
+        }
+
+        // Clear all filters
+        function clearAllFilters() {
+            console.log('[FILTER] Clearing all filters...');
+
+            // Reset filter state
+            activeFilters = {
+                years: null,
+                acclass: [],
+                road_user_category: [],
+                time_range: [],
+                impactype: [],
+                road_class: [],
+                traffctl: [],
+                light: [],
+                rdsfcond: [],
+                age_category: [],
+                vulnerable: []
+            };
+
+            // Reset geographic filter
+            activeGeoFilter = {
+                type: null,
+                value: null
+            };
+
+            // Remove boundary layer if any
+            if (currentBoundaryLayer) {
+                map.removeLayer(currentBoundaryLayer);
+                currentBoundaryLayer = null;
+            }
+
+            // Uncheck all checkboxes
+            document.querySelectorAll('#filters-container input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+            });
+
+            // Reset all geographic dropdowns
+            const wardDropdown = document.getElementById('ward-dropdown');
+            const divisionDropdown = document.getElementById('division-dropdown');
+            const neighbourhoodDropdown = document.getElementById('neighbourhood-dropdown');
+
+            if (wardDropdown) wardDropdown.value = '';
+            if (divisionDropdown) divisionDropdown.value = '';
+            if (neighbourhoodDropdown) neighbourhoodDropdown.value = '';
+
+            // Reset year slider
+            yearSlider.noUiSlider.set([2006, 2023]);
+
+            // Reload filter metadata to reset counts
+            loadFilterMetadata();
+
+            // Reload clusters
+            loadClusters();
+
+            // Update URL for permalink support
+            scheduleURLUpdate();
+        }
+
+        // Initialize year slider
+        const yearSlider = document.getElementById('yearSlider');
+        noUiSlider.create(yearSlider, {
+            start: [2006, 2023],
+            connect: true,
+            range: {
+                'min': 2006,
+                'max': 2023
+            },
+            step: 1,
+            tooltips: [
+                { to: value => Math.round(value) },
+                { to: value => Math.round(value) }
+            ],
+            format: {
+                to: value => Math.round(value),
+                from: value => Number(value)
+            }
+        });
+
+        // Update display when slider changes
+        yearSlider.noUiSlider.on('update', function(values) {
+            const start = Math.round(values[0]);
+            const end = Math.round(values[1]);
+
+            if (start === 2006 && end === 2023) {
+                document.getElementById('yearDisplay').textContent = 'All Years (2006-2023)';
+                activeFilters.years = null;
+            } else if (start === end) {
+                document.getElementById('yearDisplay').textContent = `Year ${start}`;
+                activeFilters.years = [start];
+            } else {
+                document.getElementById('yearDisplay').textContent = `Years ${start}-${end}`;
+                // Generate array of years in range
+                activeFilters.years = [];
+                for (let y = start; y <= end; y++) {
+                    activeFilters.years.push(y);
+                }
+            }
+        });
+
+        // Reload clusters when slider changes
+        yearSlider.noUiSlider.on('change', function() {
+            console.log('[FILTER] Year range changed, reloading filter metadata and clusters...');
+            loadFilterMetadata();
+            loadClusters();
+            scheduleURLUpdate();
+        });
+
+        // Reload clusters when map moves or zooms (with debouncing to prevent excessive API calls)
+        map.on('moveend', () => {
+            // Skip reload if autopanning to show popup (prevents popup from disappearing)
+            if (isAutopanning) {
+                console.log('[MAP] Autopan complete, skipping cluster reload to preserve popup');
+                isAutopanning = false;
+                return;
+            }
+
+            // Clear any pending debounce timer
+            clearTimeout(debounceTimer);
+
+            // Set new debounce timer (300ms delay)
+            debounceTimer = setTimeout(() => {
+                console.log('[MAP] Map moved, reloading clusters...');
+                loadClusters();
+                scheduleURLUpdate();
+            }, 300);
+        });
+
+        map.on('zoomend', () => {
+            // Clear any pending debounce timer
+            clearTimeout(debounceTimer);
+
+            // Set new debounce timer (300ms delay)
+            debounceTimer = setTimeout(() => {
+                console.log('[MAP] Map zoomed, reloading clusters...');
+                loadClusters();
+                scheduleURLUpdate();
+            }, 300);
+        });
+
+        // Initial load
+        map.whenReady(async () => {
+            console.log('[INIT] Map ready, checking for URL state...');
+
+            // Try to restore state from URL
+            const hasURLState = URLStateManager.restoreFromURL();
+
+            if (hasURLState) {
+                console.log('[INIT] Restored state from URL');
+            }
+
+            console.log('[INIT] Loading filter metadata...');
+            await loadFiltersMetadata(); // Load dropdown options (ward, neighbourhood, etc.)
+            await loadFilterMetadata(); // Load filter counts
+
+            // Restore UI state after filters are built
+            if (hasURLState) {
+                // Restore checkbox states
+                Object.entries(activeFilters).forEach(([filterKey, values]) => {
+                    if (Array.isArray(values) && values.length > 0) {
+                        values.forEach(filterValue => {
+                            const checkboxes = document.querySelectorAll(`input[data-filter="${filterKey}"][data-value="${filterValue}"]`);
+                            checkboxes.forEach(cb => cb.checked = true);
+                        });
+                    }
+                });
+
+                // Restore geographic dropdown
+                if (activeGeoFilter.type && activeGeoFilter.value) {
+                    const dropdown = document.getElementById(`${activeGeoFilter.type}-dropdown`);
+                    if (dropdown) {
+                        dropdown.value = activeGeoFilter.value;
+                    }
+                    // Load boundary
+                    await loadAndDisplayBoundary(activeGeoFilter.type, activeGeoFilter.value);
+                }
+            }
+
+            console.log('[INIT] Loading initial clusters...');
+            await loadClusters();
+
+            document.getElementById('loading').style.display = 'none';
+            console.log('[INIT] Map fully loaded!');
+        });
+
+        console.log('[INIT] Map initialization complete');
+    </script>
+</body>
+</html>
